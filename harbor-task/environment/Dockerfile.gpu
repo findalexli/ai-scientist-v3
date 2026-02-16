@@ -1,0 +1,50 @@
+FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime
+
+# Avoid interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# System deps: LaTeX, biber, chktex, git, curl, jq
+# (Python 3.12 + PyTorch + CUDA are already in the base image)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    texlive-latex-base texlive-latex-recommended texlive-fonts-recommended \
+    texlive-latex-extra biber chktex curl jq git git-lfs && \
+    git lfs install && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install uv for fast, reproducible Python package management
+RUN pip install --no-cache-dir uv
+
+# Additional Python deps for ML research + dataset access
+# (numpy, torch, torchvision already in base image)
+RUN uv pip install --system --no-cache \
+    pandas scikit-learn matplotlib seaborn scipy \
+    datasets huggingface-hub
+
+WORKDIR /app
+
+# Copy repo templates (staged into build context by run.sh)
+COPY blank_icbinb_latex/ /app/blank_icbinb_latex/
+COPY fewshot_examples/ /app/fewshot_examples/
+COPY scripts/ /app/scripts/
+COPY .claude/ /app/.claude/
+
+# Create workspace structure and pre-fill LaTeX template
+RUN mkdir -p /app/experiment_results /app/figures /app/latex && \
+    cp -r /app/blank_icbinb_latex/* /app/latex/
+
+# Copy previous artifacts if resuming (always exists, may be empty)
+COPY prev_artifacts/ /app/prev_artifacts/
+RUN set +e; \
+    if [ "$(ls -A /app/prev_artifacts 2>/dev/null)" ]; then \
+        cp -r /app/prev_artifacts/experiment_results/* /app/experiment_results/ 2>/dev/null; \
+        cp -r /app/prev_artifacts/figures/* /app/figures/ 2>/dev/null; \
+        cp /app/prev_artifacts/paper.tex /app/latex/template.tex 2>/dev/null; \
+        cp /app/prev_artifacts/paper.pdf /app/latex/template.pdf 2>/dev/null; \
+        cp /app/prev_artifacts/review.json /app/review.json 2>/dev/null; \
+        # Restore dependencies from previous run's snapshot
+        if [ -f /app/prev_artifacts/requirements.txt ]; then \
+            uv pip install --system --no-cache -r /app/prev_artifacts/requirements.txt 2>/dev/null; \
+        fi; \
+    fi; \
+    rm -rf /app/prev_artifacts; \
+    exit 0

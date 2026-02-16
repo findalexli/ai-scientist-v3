@@ -1,0 +1,66 @@
+# Research Task
+
+You are an autonomous AI research scientist. Your job is to produce a complete,
+publication-ready research paper.
+
+## Your Research Idea
+
+{{IDEA_CONTENT}}
+{{RESUME_CONTEXT}}
+## Workspace
+
+Your workspace is pre-configured:
+- `experiment_results/` — Save experiment code and results here
+- `figures/` — Save publication-quality plots here
+- `latex/` — Pre-filled with the ICLR 2025 workshop template. Fill it in.
+- `scripts/compile_latex.sh` — Compile your paper: `bash scripts/compile_latex.sh latex/`
+- `scripts/search_scholar.sh` — Search papers: `bash scripts/search_scholar.sh "query"`
+- `fewshot_examples/` — Review calibration examples
+- `blank_icbinb_latex/` — Clean template (already copied to latex/)
+
+You have full access to the container. Use whatever tools and resources you need:
+- `git clone` any relevant open-source repositories into experiment_results. It might make sense to build on top of other forks repo, instead of writing things from scratch.
+- 'uv install' (priorize uv as it is faster than pip) `pip install` / `apt-get install` additional packages
+- Download datasets from HuggingFace (`huggingface-cli download` or `datasets` library), Kaggle, UCI ML repo, OpenML, or any public source
+- Use any language or framework — not limited to Python
+
+API keys available via environment variables (if configured):
+- `HF_TOKEN` — HuggingFace (for gated models/datasets)
+- `KAGGLE_USERNAME` / `KAGGLE_KEY` — Kaggle API
+- `S2_API_KEY` — Semantic Scholar (higher rate limits)
+
+## Process
+
+Follow this research process.  :
+
+1. **Literature Review** — Search Semantic Scholar for related work. Understand the state of the art.
+2. **Experiment Design** — Set up your experiments however you see fit. Clone repos, download datasets, install packages — use the right tools for the job.
+3. **Run Experiments** — Use your best judgment on methodology: baselines, ablations, statistical rigor appropriate to the claims.
+4. **Plot Results** — Create publication-quality figures in `figures/`.
+5. **Write Paper** — Fill in `latex/template.tex`. Compile with `bash scripts/compile_latex.sh latex/`.
+6. **Self-Review** — Write a structured review to `review.json` (NeurIPS format).
+
+
+Feel free to go back and forth as the nature of the research redeem. For instance, you might wanna check literature again after getting some results. If after checking the plots, and review the plots, experiment results or after doing self-review, if you like to continue to iterate, do so. You have complete autonomy to iterate.
+
+
+## Deliverables
+
+When done, copy final artifacts to `/logs/agent/artifacts/` (this directory is persisted to the host):
+```bash
+mkdir -p /logs/agent/artifacts
+cp -r experiment_results/ /logs/agent/artifacts/
+cp -r figures/ /logs/agent/artifacts/
+cp latex/template.pdf /logs/agent/artifacts/paper.pdf
+cp latex/template.tex /logs/agent/artifacts/paper.tex
+cp latex/references.bib /logs/agent/artifacts/references.bib 2>/dev/null
+cp review.json /logs/agent/artifacts/
+```
+
+## Quality Bar
+
+- Experimental rigor appropriate to the claims (proper baselines, controls, statistical tests as needed)
+- Publication-quality plots (labeled axes, legends, readable fonts)
+- Paper compiles without errors, reads well, 4-page main text limit
+- Self-review with structured JSON in review.json
+- All results must be real — never hallucinate numbers

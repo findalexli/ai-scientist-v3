@@ -1,0 +1,18 @@
+version = "1.0"
+
+[metadata]
+author = "ai-scientist-v3"
+category = "research"
+tags = ["ml", "autonomous-research"]
+
+[environment]
+cpus = 4
+memory_mb = 8192
+storage_mb = 10000
+allow_internet = true   # Needed for Semantic Scholar API, dataset downloads
+
+[agent]
+timeout_sec = 3600      # 1 hour for full pipeline
+
+[verifier]
+timeout_sec = 120

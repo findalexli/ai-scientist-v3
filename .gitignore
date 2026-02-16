@@ -1,0 +1,39 @@
+# Secrets
+.env
+
+# Local settings
+.claude/settings.local.json
+
+# Run outputs
+jobs/
+logs/
+
+# Generated at runtime by run.sh (source templates are .template / .cpu / .gpu)
+harbor-task/instruction.md
+harbor-task/environment/Dockerfile
+
+# Staged build context (copied into environment/ by run.sh, cleaned up on exit)
+harbor-task/environment/blank_icbinb_latex/
+harbor-task/environment/fewshot_examples/
+harbor-task/environment/scripts/
+harbor-task/environment/.claude/
+harbor-task/environment/.env
+harbor-task/environment/prev_artifacts/
+harbor-task/environment/Dockerfile.cpu.bak
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Experiment artifacts (when running locally without Harbor)
+experiment_results/
+figures/
+latex/
+review.json
+*.npy
