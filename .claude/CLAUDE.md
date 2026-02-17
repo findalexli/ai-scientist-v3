@@ -41,7 +41,7 @@ cd ai_scientist_v3
 claude
 ```
 
-All skills (`/run-experiment`, `/plot-results`, `/write-paper`, `/search-papers`, `/review-paper`) work against the local filesystem. No isolation — artifacts write directly to the repo directory.
+All skills (`/search-papers`, `/review-paper`) work against the local filesystem. No isolation — artifacts write directly to the repo directory.
 
 ## Project Structure
 
@@ -49,7 +49,6 @@ All skills (`/run-experiment`, `/plot-results`, `/write-paper`, `/search-papers`
 - `fewshot_examples/` — Example paper reviews for calibrating the review skill
 - `scripts/` — Helper scripts:
   - `compile_latex.sh` — LaTeX compilation (pdflatex + bibtex + chktex)
-- `docs/` — Claude Code documentation reference
 - `harbor-task/` — Harbor task definition:
   - `instruction.md.template` — Research prompt template (`{{IDEA_CONTENT}}` placeholder)
   - `instruction.md` — Generated at runtime by `run.sh` (not checked in)
@@ -76,20 +75,24 @@ For local development outside Harbor:
 
 ## Artifact Collection
 
-Copy artifacts to `/logs/artifacts/` (NOT `/logs/agent/` — Harbor manages that directory and will overwrite it).
+Harbor only mounts two paths from the container to the host:
+- `/logs/agent/` → `<trial>/agent/` (bind-mounted in Docker, synced in Modal)
+- `/logs/verifier/` → `<trial>/verifier/` (bind-mounted in Docker, synced in Modal)
 
-Save incrementally after each major milestone, not just at the end:
+**Do NOT write to `/logs/artifacts/` or any other `/logs/` subpath** — they are ephemeral.
+
+The agent is instructed to save incrementally after each milestone (experiments, plots, paper, review) — not just at the end. On timeout, the verifier also copies whatever exists. Run the following to save:
 ```bash
-mkdir -p /logs/artifacts
-cp -r experiment_results/ /logs/artifacts/
-cp -r figures/ /logs/artifacts/
-cp latex/template.pdf /logs/artifacts/paper.pdf
-cp latex/template.tex /logs/artifacts/paper.tex
-cp latex/references.bib /logs/artifacts/references.bib 2>/dev/null
-cp review.json /logs/artifacts/
+mkdir -p /logs/agent/artifacts
+cp -r experiment_results/ /logs/agent/artifacts/
+cp -r figures/ /logs/agent/artifacts/
+cp latex/template.pdf /logs/agent/artifacts/paper.pdf
+cp latex/template.tex /logs/agent/artifacts/paper.tex
+cp latex/references.bib /logs/agent/artifacts/references.bib 2>/dev/null
+cp review.json /logs/agent/artifacts/
 ```
 
-These persist to `jobs/<job-id>/<trial>/artifacts/` on the host. The verifier (`test.sh`) also copies artifacts as a safety net.
+These persist to `jobs/<job-id>/<trial>/agent/artifacts/` on the host. The verifier (`test.sh`) also copies artifacts to both `agent/artifacts/` and `verifier/artifacts/` as a safety net.
 
 ## Research Conventions
 
@@ -104,11 +107,25 @@ These persist to `jobs/<job-id>/<trial>/artifacts/` on the host. The verifier (`
 
 ### File Conventions
 - Research ideas: `idea.json` (structured JSON with Name, Title, Hypothesis, etc.)
-- Experiment code: `experiment_results/experiment_*.py` (self-contained scripts)
-- Metrics: `experiment_results/*_results.npy` (numpy save files)
-- Plots: `figures/*.png` (publication quality, max 12)
+- Experiment code: `experiment_results/experiment_*.py` (self-contained, set random seeds, print key metrics during execution so logs capture them)
+- Metrics: `experiment_results/*_results.npy` (or `.csv`, `.json`, `.pt` — any standard format)
+- Plots: `figures/*.png` (publication quality, max 12, 150+ DPI, `bbox_inches='tight'`, colorblind-friendly palettes, no underscores in labels, error bars when multiple runs exist, visually inspect each PNG with `Read` tool before finalizing)
 - Paper: `latex/template.tex` → compiled to PDF
 - Review: `review.json` (structured NeurIPS format)
+
+### Experiment Guidelines
+- Use `uv pip install --system` (preferred over pip — faster)
+- `git clone` existing implementations for baselines rather than writing from scratch
+- Check GPU/RAM availability and design experiments accordingly
+- The container has a finite runtime — prefer faster iterations over one long run
+
+### Paper Writing
+- Copy `blank_icbinb_latex/` to `latex/` to start
+- Template has `%%%%%%%%%TITLE%%%%%%%%%` markers with placeholder text — replace ALL of them
+- Compile with: `bash scripts/compile_latex.sh latex/`
+- **CRITICAL**: BibTeX entries go inside `\begin{filecontents}{references.bib}...\end{filecontents}` in `template.tex`. The `\bibliography{}` argument MUST match `references` — if it says `iclr2025`, change it to `references`. Mismatched names cause all citations to render as **?**.
+- Use `/search-papers` to find papers, get BibTeX from S2 `citationStyles` field or CrossRef `dx.doi.org`. Aim for 15-30 citations.
+- Clean citation keys: lowercase, no accents, no special characters
 
 ### Quality Standards
 - Papers must compile without errors

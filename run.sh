@@ -112,8 +112,8 @@ done
 PREV_ARTIFACTS=""
 if [[ -n "$RESUME_FROM" ]]; then
     # Find the artifacts directory (support both job dir and trial dir)
-    # Check new path (artifacts/) first, then legacy path (agent/artifacts/)
-    for artifacts_subdir in "artifacts" "agent/artifacts"; do
+    # Check all possible artifact locations (agent/, verifier/ are Harbor-mounted paths)
+    for artifacts_subdir in "agent/artifacts" "verifier/artifacts" "artifacts"; do
         if [[ -d "$RESUME_FROM/$artifacts_subdir" ]]; then
             PREV_ARTIFACTS="$RESUME_FROM/$artifacts_subdir"
             break
@@ -124,7 +124,7 @@ if [[ -n "$RESUME_FROM" ]]; then
     if [[ -z "$PREV_ARTIFACTS" ]]; then
         TRIAL_DIR=$(find "$RESUME_FROM" -maxdepth 1 -type d -name "harbor-task__*" | head -1)
         if [[ -n "$TRIAL_DIR" ]]; then
-            for artifacts_subdir in "artifacts" "agent/artifacts"; do
+            for artifacts_subdir in "agent/artifacts" "verifier/artifacts" "artifacts"; do
                 if [[ -d "$TRIAL_DIR/$artifacts_subdir" ]]; then
                     PREV_ARTIFACTS="$TRIAL_DIR/$artifacts_subdir"
                     break

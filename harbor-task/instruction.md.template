@@ -14,8 +14,9 @@ Your workspace is pre-configured:
 - `figures/` — Save publication-quality plots here
 - `latex/` — Pre-filled with the ICLR 2025 workshop template. Fill it in.
 - `scripts/compile_latex.sh` — Compile your paper: `bash scripts/compile_latex.sh latex/`
-- `scripts/search_scholar.sh` — Search papers: `bash scripts/search_scholar.sh "query"`
 - `fewshot_examples/` — Review calibration examples
+- Use `/search-papers` to find related work, get BibTeX, and check novelty
+- Use `/review-paper` to conduct a structured self-review with the questions generation model
 - `blank_icbinb_latex/` — Clean template (already copied to latex/)
 
 You have full access to the container. Use whatever tools and resources you need:
@@ -31,14 +32,14 @@ API keys available via environment variables (if configured):
 
 ## Process
 
-Follow this research process.  :
+Follow this research process:
 
-1. **Literature Review** — Search Semantic Scholar for related work. Understand the state of the art.
+1. **Literature Review** — Use `/search-papers` to find related work. Understand the state of the art.
 2. **Experiment Design** — Set up your experiments however you see fit. Clone repos, download datasets, install packages — use the right tools for the job.
 3. **Run Experiments** — Use your best judgment on methodology: baselines, ablations, statistical rigor appropriate to the claims.
 4. **Plot Results** — Create publication-quality figures in `figures/`.
 5. **Write Paper** — Fill in `latex/template.tex`. Compile with `bash scripts/compile_latex.sh latex/`.
-6. **Self-Review** — Write a structured review to `review.json` (NeurIPS format).
+6. **Self-Review** — Use `/review-paper` to conduct a structured review. This runs the extraction script and questions generation model, then produces `review.json`.
 
 
 Feel free to go back and forth as the nature of the research redeem. For instance, you might wanna check literature again after getting some results. If after checking the plots, and review the plots, experiment results or after doing self-review, if you like to continue to iterate, do so. You have complete autonomy to iterate.
@@ -46,18 +47,20 @@ Feel free to go back and forth as the nature of the research redeem. For instanc
 
 ## Deliverables
 
-When done, copy final artifacts to `/logs/artifacts/` (this directory is persisted to the host):
+When done, copy final artifacts to `/logs/agent/artifacts/` (this directory is bind-mounted to the host):
 ```bash
-mkdir -p /logs/artifacts
-cp -r experiment_results/ /logs/artifacts/
-cp -r figures/ /logs/artifacts/
-cp latex/template.pdf /logs/artifacts/paper.pdf
-cp latex/template.tex /logs/artifacts/paper.tex
-cp latex/references.bib /logs/artifacts/references.bib 2>/dev/null
-cp review.json /logs/artifacts/
+mkdir -p /logs/agent/artifacts
+cp -r experiment_results/ /logs/agent/artifacts/
+cp -r figures/ /logs/agent/artifacts/
+cp latex/template.pdf /logs/agent/artifacts/paper.pdf
+cp latex/template.tex /logs/agent/artifacts/paper.tex
+cp latex/references.bib /logs/agent/artifacts/references.bib 2>/dev/null
+cp review.json /logs/agent/artifacts/
 ```
 
-**Important:** Save artifacts incrementally throughout the run — don't wait until the end. After each major milestone (experiments done, plots done, paper compiled), copy what you have so far to `/logs/artifacts/`. This ensures partial work is preserved if the run times out.
+**Important:** Save artifacts incrementally throughout the run — don't wait until the end. After each major milestone (experiments done, plots done, paper compiled), copy what you have so far to `/logs/agent/artifacts/`. This ensures partial work is preserved if the run times out.
+
+> Note: Only `/logs/agent/` and `/logs/verifier/` are mounted to the host. Do NOT write to `/logs/artifacts/` — it is ephemeral and will be lost.
 
 ## Quality Bar
 

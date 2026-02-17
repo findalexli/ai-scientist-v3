@@ -1,151 +1,110 @@
 ---
 name: search-papers
-description: Search Semantic Scholar for academic papers. Use when you need to find related work, check novelty, or gather citations.
+description: Search for academic papers using Semantic Scholar, OpenReview, and CrossRef. Use when you need to find related work, check novelty, gather citations, download PDFs, or get BibTeX.
+argument-hint: "[query or topic]"
 allowed-tools: Bash, Read
 ---
 
-# Semantic Scholar API
+# Academic Paper Search (3-API Stack)
 
-Call the S2 API directly with `curl`. No wrapper script needed.
+Search query: $ARGUMENTS
 
-## Authentication
+Three APIs, each with a clear role:
 
+| API | Role | Auth |
+|-----|------|------|
+| **Semantic Scholar (S2)** | Search, citation graph, sort by impact | `$S2_API_KEY` header (optional but recommended) |
+| **OpenReview** | PDFs, peer reviews, BibTeX for ML venues | None needed for public data |
+| **CrossRef** | BibTeX for any paper by DOI | None (use `mailto` for polite pool) |
+
+**Important:** Source `.env` before using S2 with a key:
 ```bash
-# With API key (1 request/sec, dedicated pool)
-curl -s -H "x-api-key: $S2_API_KEY" "https://api.semanticscholar.org/graph/v1/..."
-
-# Without key (shared pool, expect 429s under load)
-curl -s "https://api.semanticscholar.org/graph/v1/..."
+set -a; source .env; set +a  # loads S2_API_KEY
 ```
 
-**Rate limits:** 1 request per second with a key. Without a key you share a public pool — back off on 429.
+For detailed API reference with all endpoints and parameters, see [reference.md](reference.md).
 
-## Endpoints
+---
 
-### 1. Paper Search (keyword)
+## Decision Guide: Which API When?
 
-Find papers by keyword query. Returns up to 100 results per page.
+| I want to... | Use |
+|--------------|-----|
+| Find papers on a topic | S2 keyword search (`/paper/search`) |
+| Find most-cited papers | S2 bulk search (`/paper/search/bulk?sort=citationCount:desc`) |
+| Look up a specific paper | S2 paper lookup (by ArXiv ID, DOI, or S2 ID) |
+| Find exact title match | S2 title match (`/paper/search/match`) |
+| Get citation graph | S2 citations + references endpoints |
+| Resolve multiple papers at once | S2 batch POST (up to 500 IDs) |
+| Download a PDF | OpenReview (`/pdf?id=<note_id>`) |
+| Read peer reviews + scores | OpenReview (`/notes?forum=<id>`) |
+| Browse a venue's papers | OpenReview (`/notes?content.venueid=...`) |
+| Get BibTeX | S2 `citationStyles` field (fastest), or CrossRef via `dx.doi.org` (most reliable) |
 
-```bash
-curl -s -H "x-api-key: $S2_API_KEY" \
-  "https://api.semanticscholar.org/graph/v1/paper/search?query=regularization+neural+networks&limit=10&fields=title,authors,venue,year,abstract,citationCount,citationStyles,tldr,openAccessPdf"
-```
+---
 
-**Useful parameters:**
-- `query` — search terms (URL-encoded, use `+` for spaces)
-- `limit` — results per page (default 10, max 100)
-- `offset` — pagination offset
-- `year` — filter by year range: `2022-2025`, `2023-`, `-2020`
-- `fieldsOfStudy` — filter: `Computer Science`, `Mathematics`, etc.
-- `fields` — comma-separated list of fields to return (see Fields below)
+## Quick Start: Common Workflows
 
-### 2. Paper Lookup (by ID)
-
-Get details for a specific paper by its Semantic Scholar ID, DOI, ArXiv ID, or other identifier.
-
-```bash
-# By Semantic Scholar paper ID
-curl -s -H "x-api-key: $S2_API_KEY" \
-  "https://api.semanticscholar.org/graph/v1/paper/649def34f8be52c8b66281af98ae884c09aef38b?fields=title,abstract,authors,citationCount,citationStyles,references"
-
-# By DOI
-curl -s -H "x-api-key: $S2_API_KEY" \
-  "https://api.semanticscholar.org/graph/v1/paper/DOI:10.18653/v1/N19-1423?fields=title,abstract,citationCount"
-
-# By ArXiv ID
-curl -s -H "x-api-key: $S2_API_KEY" \
-  "https://api.semanticscholar.org/graph/v1/paper/ArXiv:1706.03762?fields=title,abstract,citationCount,citationStyles"
-```
-
-### 3. Citations (papers that cite a given paper)
+### Literature search (find related work)
 
 ```bash
+# 1. Relevance-ranked search
 curl -s -H "x-api-key: $S2_API_KEY" \
-  "https://api.semanticscholar.org/graph/v1/paper/ArXiv:1706.03762/citations?fields=title,authors,year,citationCount&limit=20"
+  "https://api.semanticscholar.org/graph/v1/paper/search?query=YOUR+TOPIC&limit=10&fields=title,year,citationCount,abstract,externalIds,citationStyles"
+
+# 2. Most-cited papers on the topic
+curl -s -H "x-api-key: $S2_API_KEY" \
+  "https://api.semanticscholar.org/graph/v1/paper/search/bulk?query=YOUR+TOPIC&sort=citationCount:desc&fields=title,year,citationCount&limit=10"
 ```
 
-Returns `{ "data": [{ "citingPaper": { ... } }, ...] }`.
-
-### 4. References (papers cited by a given paper)
+### Get BibTeX for a paper
 
 ```bash
+# Option A: From S2 (include citationStyles field — has bibtex key)
 curl -s -H "x-api-key: $S2_API_KEY" \
-  "https://api.semanticscholar.org/graph/v1/paper/ArXiv:1706.03762/references?fields=title,authors,year,citationCount&limit=20"
+  "https://api.semanticscholar.org/graph/v1/paper/ArXiv:1706.03762?fields=title,citationStyles"
+
+# Option B: From CrossRef via DOI (works for ALL DOI types)
+curl -s -L -H "Accept: application/x-bibtex" "https://dx.doi.org/$DOI"
 ```
 
-Returns `{ "data": [{ "citedPaper": { ... } }, ...] }`.
-
-### 5. Snippet Search (keyword search with context snippets)
-
-Returns text snippets from papers matching the query — useful for finding specific claims or results.
+### Deep dive on a paper (reviews + PDF)
 
 ```bash
-curl -s -H "x-api-key: $S2_API_KEY" \
-  "https://api.semanticscholar.org/graph/v1/paper/search?query=dropout+hurts+transformers&limit=5&fields=title,year,citationCount,tldr"
+# Search OpenReview for the paper
+curl -s "https://api2.openreview.net/notes/search?term=PAPER+TITLE&source=forum&limit=1"
+
+# Get reviews (use forum ID from above)
+curl -s "https://api2.openreview.net/notes?forum=$FORUM_ID&limit=50"
+
+# Download PDF
+curl -s "https://api2.openreview.net/pdf?id=$NOTE_ID" -o paper.pdf
 ```
 
-Tip: use specific natural-language queries (e.g., "dropout hurts transformer performance") for more targeted results.
+### Check novelty
 
-### 6. Paper Recommendations
+1. S2 keyword search for your exact idea
+2. S2 bulk search sorted by citations to find seminal work
+3. Check citations/references of the closest papers
+4. Search OpenReview for recent ICLR/NeurIPS/ICML submissions
 
-Get papers similar to a given paper.
-
-```bash
-# Single-paper recommendations
-curl -s -H "x-api-key: $S2_API_KEY" \
-  "https://api.semanticscholar.org/recommendations/v1/papers/forpaper/ArXiv:1706.03762?fields=title,authors,year,citationCount&limit=10"
-
-# Multi-paper recommendations (POST)
-curl -s -X POST -H "x-api-key: $S2_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"positivePaperIds": ["ArXiv:1706.03762", "ArXiv:1810.04805"], "negativePaperIds": []}' \
-  "https://api.semanticscholar.org/recommendations/v1/papers/?fields=title,authors,year,citationCount&limit=10"
-```
-
-## Fields Reference
-
-Request only what you need to minimize response size:
-
-| Field | Description |
-|-------|-------------|
-| `title` | Paper title |
-| `authors` | List of `{authorId, name}` objects |
-| `venue` | Publication venue (conference/journal) |
-| `year` | Publication year |
-| `abstract` | Full abstract |
-| `citationCount` | Number of citations |
-| `citationStyles` | Contains `bibtex` key with BibTeX entry |
-| `fieldsOfStudy` | Research areas (e.g., "Computer Science") |
-| `tldr` | AI-generated summary: `{model, text}` |
-| `openAccessPdf` | `{url}` to free PDF if available |
-| `references` | List of referenced papers |
-| `citations` | List of citing papers |
-
-## Error Handling
-
-- **429 Too Many Requests** — Back off 2-5 seconds and retry. Exponential backoff for repeated 429s.
-- **404 Not Found** — Paper ID doesn't exist. Check the ID format.
-- **400 Bad Request** — Usually a malformed `fields` parameter. Check field names.
-
-Add `-w "\n%{http_code}"` to curl to check status codes:
-```bash
-curl -s -w "\n%{http_code}" -H "x-api-key: $S2_API_KEY" \
-  "https://api.semanticscholar.org/graph/v1/paper/search?query=test&limit=1&fields=title"
-```
+---
 
 ## Search Tips
 
+- **Use keyword phrases, not sentences** — S2 natural language queries return 0 results
 - **Start broad, then narrow**: "regularization" → "L2 regularization neural networks"
-- **Use technical terms**: "contrastive learning" not "comparing things"
-- **Check different angles**: Search for the method, the problem, and the application
 - **Filter by year** for recent work: `&year=2023-`
-- **Multiple searches**: Do 3-5 searches with different queries for comprehensive coverage
+- **Use minCitationCount** to skip low-impact: `&minCitationCount=50`
+- **Multiple searches**: 3-5 queries with different angles for coverage
 
-## For Citation Collection
+## Gotchas
 
-1. Search for key topics in your paper (2-3 searches)
-2. Search for specific methods you use or compare against
-3. Search for datasets you use
-4. Include `citationStyles` in fields to get BibTeX entries
-5. Clean citation keys: lowercase, no accents, no special characters
-6. Parse results with `python3 -c "import sys,json; ..."` for extraction
+- **S2 abstracts** may contain control chars (ESC/0x1b). Strip with: `re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', text)`
+- **S2 openAccessPdf** is often empty — use OpenReview for PDFs
+- **S2 `/paper/search`** does NOT support sort — use `/paper/search/bulk` instead
+- **S2 `/paper/{id}/citations`** does NOT support sort — newest first only
+- **CrossRef `/transform`** fails for arXiv DOIs — always use `dx.doi.org`
+- **CrossRef references** unreliable — use S2 for reference lists
+- **OpenReview V2** wraps values: `content.title.value`, not `content.title`
+- **OpenReview venue IDs** have no trailing slash: `ICLR.cc/2024/Conference`
