@@ -27,7 +27,17 @@ v2 used ~5000 lines of Python to orchestrate a 4-stage BFS tree search with hard
 ./run.sh idea.json --model anthropic/claude-sonnet-4-5-20250929   # Use Sonnet
 ./run.sh idea.json --timeout 7200                                 # 2hr timeout
 ./run.sh idea.json --env modal --gpus 1                           # Modal cloud with GPU
+./run.sh idea.json --env modal --gpus 1 --artifact-sync-interval 120
 ```
+
+By default, `run.sh` uses a local patched Claude agent (via `--agent-import-path`) to
+improve Modal reliability without modifying Harbor source code:
+- picks the primary Claude session log even when subagent logs exist
+- syncs artifacts to `/logs/agent/artifacts` and `/logs/verifier/artifacts` periodically
+  and again on `TERM/EXIT` (critical for timeout cases)
+- includes Claude session logs in artifacts (`claude_sessions/`), including subagent traces
+
+Use `--use-upstream-agent` if you want Harbor's built-in `claude-code` agent behavior.
 
 ### Interactive Mode (No Docker)
 

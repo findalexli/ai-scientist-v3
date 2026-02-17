@@ -20,6 +20,9 @@ RESUME_FROM=""
 ENV_TYPE=""        # empty = docker (default)
 GPUS="0"
 MODAL_SECRET="harbor-env"
+USE_UPSTREAM_AGENT="0"
+ARTIFACT_SYNC_INTERVAL="180"
+PATCHED_AGENT_IMPORT_PATH="local_harbor_agents.patched_claude_code:PatchedClaudeCode"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -48,6 +51,14 @@ while [[ $# -gt 0 ]]; do
             MODAL_SECRET="$2"
             shift 2
             ;;
+        --use-upstream-agent)
+            USE_UPSTREAM_AGENT="1"
+            shift
+            ;;
+        --artifact-sync-interval)
+            ARTIFACT_SYNC_INTERVAL="$2"
+            shift 2
+            ;;
         -h|--help)
             echo "Usage: ./run.sh <idea.json> [OPTIONS]"
             echo ""
@@ -61,6 +72,8 @@ while [[ $# -gt 0 ]]; do
             echo "  --env ENV                  Environment: docker (default) or modal"
             echo "  --gpus N                   Number of GPUs (default: 0, requires --env modal)"
             echo "  --modal-secret NAME        Modal secret name (default: harbor-env)"
+            echo "  --use-upstream-agent       Use Harbor's built-in claude-code agent"
+            echo "  --artifact-sync-interval S Artifact sync interval in seconds (default: 180)"
             exit 0
             ;;
         *)
@@ -89,6 +102,11 @@ fi
 # Validate: GPUs require Modal
 if [[ "$GPUS" != "0" && "$ENV_TYPE" != "modal" ]]; then
     echo "Error: --gpus requires --env modal (local Docker does not support GPUs)" >&2
+    exit 1
+fi
+
+if ! [[ "$ARTIFACT_SYNC_INTERVAL" =~ ^[0-9]+$ ]] || [[ "$ARTIFACT_SYNC_INTERVAL" -lt 30 ]]; then
+    echo "Error: --artifact-sync-interval must be an integer >= 30" >&2
     exit 1
 fi
 
@@ -230,12 +248,18 @@ TIMEOUT_MULTIPLIER=$(python3 -c "print($TIMEOUT / $TASK_TOML_TIMEOUT)")
 HARBOR_ARGS=(
     harbor run
     -p "$SCRIPT_DIR/harbor-task/"
-    -a claude-code
     -m "$MODEL"
     --timeout-multiplier "$TIMEOUT_MULTIPLIER"
     --ak "timeout_sec=$TIMEOUT"
     -n 1
 )
+
+if [[ "$USE_UPSTREAM_AGENT" == "1" ]]; then
+    HARBOR_ARGS+=(-a claude-code)
+else
+    HARBOR_ARGS+=(--agent-import-path "$PATCHED_AGENT_IMPORT_PATH")
+    HARBOR_ARGS+=(--ak "artifact_sync_interval_sec=$ARTIFACT_SYNC_INTERVAL")
+fi
 
 # Environment type
 if [[ -n "$ENV_TYPE" ]]; then
@@ -257,6 +281,12 @@ echo "  Idea:    $IDEA_JSON"
 echo "  Model:   $MODEL"
 echo "  Timeout: ${TIMEOUT}s"
 echo "  Env:     ${ENV_TYPE:-docker}"
+if [[ "$USE_UPSTREAM_AGENT" == "1" ]]; then
+    echo "  Agent:   claude-code (upstream)"
+else
+    echo "  Agent:   PatchedClaudeCode (local import)"
+    echo "  Sync:    ${ARTIFACT_SYNC_INTERVAL}s"
+fi
 if [[ "$GPUS" != "0" ]]; then
     echo "  GPUs:    $GPUS"
 fi
@@ -265,4 +295,4 @@ if [[ -n "$PREV_ARTIFACTS" ]]; then
 fi
 echo ""
 
-"${HARBOR_ARGS[@]}"
+PYTHONPATH="$SCRIPT_DIR${PYTHONPATH:+:$PYTHONPATH}" "${HARBOR_ARGS[@]}"
