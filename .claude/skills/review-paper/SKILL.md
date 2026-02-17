@@ -2,7 +2,6 @@
 name: review-paper
 description: Review a research paper and provide structured NeurIPS-format feedback with ratings and decision.
 argument-hint: "[path/to/template.tex]"
-disable-model-invocation: true
 allowed-tools: Bash, Read
 ---
 

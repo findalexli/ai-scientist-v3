@@ -1,18 +1,6 @@
 {
-  "Name": "dropout_in_transformers",
-  "Title": "Revisiting Dropout in Transformer Architectures: When Regularization Hurts",
-  "Short Hypothesis": "Standard dropout regularization may be counterproductive in modern transformer architectures when combined with other regularization techniques like layer normalization and weight decay, particularly on smaller datasets.",
-  "Related Work": "Srivastava et al. (2014) introduced dropout as a regularization technique. Vaswani et al. (2017) used dropout in the original Transformer. Recent work by Zoph et al. (2022) and Liu et al. (2023) suggests that dropout may be unnecessary in large-scale pre-training. However, the interaction between dropout and other regularization methods in smaller transformer models remains underexplored.",
-  "Abstract": "We investigate the effect of dropout on transformer performance across varying dataset sizes and model scales. Our experiments on CIFAR-10, CIFAR-100, and a subset of ImageNet reveal that dropout consistently degrades performance when layer normalization and weight decay are present, with the effect being most pronounced on smaller datasets. We find that removing dropout improves accuracy by 1.2-3.5% across configurations, challenging the conventional wisdom that dropout is always beneficial. Our ablation study identifies the interaction between dropout and layer normalization as the primary cause of this negative effect.",
-  "Experiments": [
-    "Train Vision Transformers (ViT-Small) on CIFAR-10 with and without dropout at rates 0.0, 0.1, 0.3, 0.5",
-    "Repeat experiments on CIFAR-100 and ImageNet-100 subsets",
-    "Ablation: systematically disable layer norm, weight decay, and dropout combinations",
-    "Measure training dynamics: gradient norms, loss landscapes, representation similarity"
-  ],
-  "Risk Factors and Limitations": [
-    "Results may not generalize to larger models or datasets",
-    "Limited to vision transformers; NLP transformers may behave differently",
-    "Computational budget limits number of hyperparameter configurations tested"
-  ]
+  "Name": "tabpfn_vs_boosting",
+  "Title": "When Does TabPFN Beat Gradient Boosting? A Systematic Study on Small Tabular Datasets",
+  "Short Hypothesis": "TabPFN v2's in-context learning approach likely has a crossover point against XGBoost/LightGBM that depends on dataset size, feature count, and feature types — but the exact boundary is poorly characterized.",
+  "Related Work": "Hollmann et al. (2023) introduced TabPFN at ICLR. PriorLabs released TabPFN v2 (Nature, 2025). McElfresh et al. (2023) asked 'When Do Neural Nets Outperform Boosted Trees on Tabular Data?' but predates TabPFN v2. No systematic study of v2 against tuned gradient boosting on the OpenML CC18 benchmark exists."
 }
