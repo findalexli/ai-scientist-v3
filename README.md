@@ -62,10 +62,51 @@ Each experiment runs in an isolated Docker container via Harbor:
 1. `run.sh <idea.json>` generates `instruction.md` from the `.template` with the idea injected
 2. Harbor builds a Docker image from `Dockerfile.cpu` (slim) or `Dockerfile.gpu` (CUDA + PyTorch)
 3. The agent (Claude Code) runs inside the container at `/app/`
-4. For GPU runs, `--override-gpus` attaches GPUs via Modal
+4. On completion, `harbor-task/tests/test.sh` verifies all artifacts were produced
 5. Results are collected in `jobs/<job-id>/` on the host
 
 Source templates are never modified — `run.sh` generates `instruction.md` and `Dockerfile` at runtime and cleans them up on exit.
+
+### Running an Experiment
+
+```bash
+./run.sh idea.json                                                # Default: Opus 4.6, 2hr timeout
+./run.sh idea.json --model anthropic/claude-sonnet-4-5-20250929   # Use Sonnet
+./run.sh idea.json --timeout 7200                                 # 2hr timeout
+```
+
+### Resuming a Timed-Out Run
+
+If a run times out or you want to continue from previous artifacts:
+
+```bash
+./run.sh idea.json --resume-from jobs/2026-02-14__12-10-51/ --timeout 7200
+```
+
+This bakes the previous run's artifacts (experiments, plots, paper, review) into the new container and injects a "Resumed Session" section into the instruction so the agent knows to continue rather than start over. You can pass either a job directory or a trial directory.
+
+### Viewing Job Results
+
+From the repo root, start the Harbor trajectory viewer with the **`jobs`** folder (Harbor expects the folder that contains job/trial directories):
+
+```bash
+harbor view jobs
+# or
+./view.sh
+```
+
+If you run `harbor view` with no argument, you'll get "Missing argument 'FOLDER'". Using `harbor view .` starts the server but looks for job dirs at the project root, so no jobs appear — job dirs live under `jobs/`.
+
+### Interactive Mode (No Docker)
+
+You can also run Claude Code directly without Harbor for interactive research:
+
+```bash
+cd ai_scientist_v3
+claude
+```
+
+All skills (`/run-experiment`, `/plot-results`, `/write-paper`, `/search-papers`, `/review-paper`) work against the local filesystem. No isolation — artifacts write directly to the repo directory.
 
 ## How It Works
 

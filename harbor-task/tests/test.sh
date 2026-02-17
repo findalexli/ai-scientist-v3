@@ -9,14 +9,14 @@ TOTAL=4
 uv pip freeze --system > /app/requirements.txt 2>/dev/null || pip freeze > /app/requirements.txt 2>/dev/null
 
 # Copy artifacts to mounted dir (in case the agent didn't)
-mkdir -p /logs/agent/artifacts
-cp -r /app/experiment_results/ /logs/agent/artifacts/ 2>/dev/null
-cp -r /app/figures/ /logs/agent/artifacts/ 2>/dev/null
-cp /app/latex/template.pdf /logs/agent/artifacts/paper.pdf 2>/dev/null
-cp /app/latex/template.tex /logs/agent/artifacts/paper.tex 2>/dev/null
-cp /app/latex/references.bib /logs/agent/artifacts/references.bib 2>/dev/null
-cp /app/review.json /logs/agent/artifacts/ 2>/dev/null
-cp /app/requirements.txt /logs/agent/artifacts/requirements.txt 2>/dev/null
+mkdir -p /logs/artifacts
+cp -r /app/experiment_results/ /logs/artifacts/ 2>/dev/null
+cp -r /app/figures/ /logs/artifacts/ 2>/dev/null
+cp /app/latex/template.pdf /logs/artifacts/paper.pdf 2>/dev/null
+cp /app/latex/template.tex /logs/artifacts/paper.tex 2>/dev/null
+cp /app/latex/references.bib /logs/artifacts/references.bib 2>/dev/null
+cp /app/review.json /logs/artifacts/ 2>/dev/null
+cp /app/requirements.txt /logs/artifacts/requirements.txt 2>/dev/null
 
 # Check experiment results
 if [ -d /app/experiment_results ] && [ -n "$(ls /app/experiment_results/*.npy 2>/dev/null)" ]; then

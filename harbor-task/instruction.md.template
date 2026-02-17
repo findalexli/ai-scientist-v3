@@ -46,16 +46,18 @@ Feel free to go back and forth as the nature of the research redeem. For instanc
 
 ## Deliverables
 
-When done, copy final artifacts to `/logs/agent/artifacts/` (this directory is persisted to the host):
+When done, copy final artifacts to `/logs/artifacts/` (this directory is persisted to the host):
 ```bash
-mkdir -p /logs/agent/artifacts
-cp -r experiment_results/ /logs/agent/artifacts/
-cp -r figures/ /logs/agent/artifacts/
-cp latex/template.pdf /logs/agent/artifacts/paper.pdf
-cp latex/template.tex /logs/agent/artifacts/paper.tex
-cp latex/references.bib /logs/agent/artifacts/references.bib 2>/dev/null
-cp review.json /logs/agent/artifacts/
+mkdir -p /logs/artifacts
+cp -r experiment_results/ /logs/artifacts/
+cp -r figures/ /logs/artifacts/
+cp latex/template.pdf /logs/artifacts/paper.pdf
+cp latex/template.tex /logs/artifacts/paper.tex
+cp latex/references.bib /logs/artifacts/references.bib 2>/dev/null
+cp review.json /logs/artifacts/
 ```
+
+**Important:** Save artifacts incrementally throughout the run — don't wait until the end. After each major milestone (experiments done, plots done, paper compiled), copy what you have so far to `/logs/artifacts/`. This ensures partial work is preserved if the run times out.
 
 ## Quality Bar
 

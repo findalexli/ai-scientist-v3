@@ -14,8 +14,12 @@ Generate professional, publication-quality plots from experiment results.
 2. **Plan plots**: Decide what visualizations best tell the story
 3. **Write aggregator script**: Create `auto_plot_aggregator.py` that reads all results and generates plots
 4. **Run it**: Execute the script, check output in `figures/`
-5. **Review**: Look at generated plots, refine styling
-6. **Iterate**: Fix issues, improve clarity, re-run
+5. **Review visually**: Use the `Read` tool on each generated PNG file to visually inspect it. Claude Code is multimodal and can see images directly. Check for:
+   - Correct data rendering (values match expected results)
+   - Readable labels, legends, and titles
+   - Appropriate styling and color choices
+   - No overlapping text, clipped elements, or layout issues
+6. **Iterate**: Fix issues found during visual review, re-run the script, and inspect again until all plots meet publication quality
 
 ## Plot Standards
 

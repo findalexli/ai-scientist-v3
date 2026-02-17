@@ -17,7 +17,7 @@ Each experiment runs in an isolated Docker container via [Harbor](https://github
 ### Running an Experiment
 
 ```bash
-./run.sh idea.json                                                # Default: Opus 4.6, 1hr timeout
+./run.sh idea.json                                                # Default: Opus 4.6, 2hr timeout
 ./run.sh idea.json --model anthropic/claude-sonnet-4-5-20250929   # Use Sonnet
 ./run.sh idea.json --timeout 7200                                 # 2hr timeout
 ```
@@ -76,18 +76,20 @@ For local development outside Harbor:
 
 ## Artifact Collection
 
-When the research pipeline completes, copy final artifacts to the mounted logs directory:
+Copy artifacts to `/logs/artifacts/` (NOT `/logs/agent/` — Harbor manages that directory and will overwrite it).
+
+Save incrementally after each major milestone, not just at the end:
 ```bash
-mkdir -p /logs/agent/artifacts
-cp -r experiment_results/ /logs/agent/artifacts/
-cp -r figures/ /logs/agent/artifacts/
-cp latex/template.pdf /logs/agent/artifacts/paper.pdf
-cp latex/template.tex /logs/agent/artifacts/paper.tex
-cp latex/references.bib /logs/agent/artifacts/references.bib 2>/dev/null
-cp review.json /logs/agent/artifacts/
+mkdir -p /logs/artifacts
+cp -r experiment_results/ /logs/artifacts/
+cp -r figures/ /logs/artifacts/
+cp latex/template.pdf /logs/artifacts/paper.pdf
+cp latex/template.tex /logs/artifacts/paper.tex
+cp latex/references.bib /logs/artifacts/references.bib 2>/dev/null
+cp review.json /logs/artifacts/
 ```
 
-These persist to `jobs/<job-id>/agent/artifacts/` on the host. The verifier (`test.sh`) also copies artifacts as a safety net.
+These persist to `jobs/<job-id>/<trial>/artifacts/` on the host. The verifier (`test.sh`) also copies artifacts as a safety net.
 
 ## Research Conventions
 

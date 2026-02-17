@@ -15,7 +15,7 @@ set -euo pipefail
 
 IDEA_JSON=""
 MODEL="anthropic/claude-opus-4-6"
-TIMEOUT="3600"
+TIMEOUT="7200"
 RESUME_FROM=""
 ENV_TYPE=""        # empty = docker (default)
 GPUS="0"
@@ -56,7 +56,7 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Options:"
             echo "  --model MODEL              LLM model (default: anthropic/claude-opus-4-6)"
-            echo "  --timeout SECS             Agent timeout in seconds (default: 3600)"
+            echo "  --timeout SECS             Agent timeout in seconds (default: 7200)"
             echo "  --resume-from JOB_PATH     Resume from a previous run's artifacts"
             echo "  --env ENV                  Environment: docker (default) or modal"
             echo "  --gpus N                   Number of GPUs (default: 0, requires --env modal)"
@@ -112,19 +112,30 @@ done
 PREV_ARTIFACTS=""
 if [[ -n "$RESUME_FROM" ]]; then
     # Find the artifacts directory (support both job dir and trial dir)
-    if [[ -d "$RESUME_FROM/agent/artifacts" ]]; then
-        PREV_ARTIFACTS="$RESUME_FROM/agent/artifacts"
-    else
-        # Job dir: find the trial subdir
+    # Check new path (artifacts/) first, then legacy path (agent/artifacts/)
+    for artifacts_subdir in "artifacts" "agent/artifacts"; do
+        if [[ -d "$RESUME_FROM/$artifacts_subdir" ]]; then
+            PREV_ARTIFACTS="$RESUME_FROM/$artifacts_subdir"
+            break
+        fi
+    done
+
+    # If not found directly, look inside trial subdirectory (job dir case)
+    if [[ -z "$PREV_ARTIFACTS" ]]; then
         TRIAL_DIR=$(find "$RESUME_FROM" -maxdepth 1 -type d -name "harbor-task__*" | head -1)
-        if [[ -n "$TRIAL_DIR" && -d "$TRIAL_DIR/agent/artifacts" ]]; then
-            PREV_ARTIFACTS="$TRIAL_DIR/agent/artifacts"
+        if [[ -n "$TRIAL_DIR" ]]; then
+            for artifacts_subdir in "artifacts" "agent/artifacts"; do
+                if [[ -d "$TRIAL_DIR/$artifacts_subdir" ]]; then
+                    PREV_ARTIFACTS="$TRIAL_DIR/$artifacts_subdir"
+                    break
+                fi
+            done
         fi
     fi
 
     if [[ -z "$PREV_ARTIFACTS" || ! -d "$PREV_ARTIFACTS" ]]; then
         echo "Error: no artifacts found in $RESUME_FROM" >&2
-        echo "Expected agent/artifacts/ directory with previous run outputs" >&2
+        echo "Expected artifacts/ directory with previous run outputs" >&2
         exit 1
     fi
 
@@ -211,11 +222,17 @@ open(sys.argv[4], 'w').write(result)
 " "$INSTRUCTION_TEMPLATE" "$IDEA_JSON" "$RESUME_NOTE" "$INSTRUCTION_OUT"
 
 # --- Build harbor run command ---
+# Harbor enforces timeout from task.toml [agent] timeout_sec * --timeout-multiplier.
+# Compute multiplier so the user's --timeout value is actually enforced.
+TASK_TOML_TIMEOUT=7200  # must match harbor-task/task.toml [agent] timeout_sec
+TIMEOUT_MULTIPLIER=$(python3 -c "print($TIMEOUT / $TASK_TOML_TIMEOUT)")
+
 HARBOR_ARGS=(
     harbor run
     -p "$SCRIPT_DIR/harbor-task/"
     -a claude-code
     -m "$MODEL"
+    --timeout-multiplier "$TIMEOUT_MULTIPLIER"
     --ak "timeout_sec=$TIMEOUT"
     -n 1
 )
