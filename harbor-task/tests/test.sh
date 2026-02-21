@@ -18,6 +18,7 @@ for dest in /logs/agent/artifacts /logs/verifier/artifacts; do
     cp /app/latex/references.bib "$dest/references.bib" 2>/dev/null
     cp /app/review.json "$dest/" 2>/dev/null
     cp /app/requirements.txt "$dest/requirements.txt" 2>/dev/null
+    cp -r /app/submissions/ "$dest/submissions/" 2>/dev/null
 done
 
 # Check experiment results

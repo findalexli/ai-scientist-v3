@@ -26,6 +26,7 @@ v2 used ~5000 lines of Python to orchestrate a 4-stage BFS tree search with hard
 ./run.sh idea.json                                                # Default: Opus 4.6, 2hr timeout
 ./run.sh idea.json --model anthropic/claude-sonnet-4-5-20250929   # Use Sonnet
 ./run.sh idea.json --timeout 7200                                 # 2hr timeout
+./run.sh idea.json --gpus 1                                       # Local Docker with GPU
 ./run.sh idea.json --env modal --gpus 1                           # Modal cloud with GPU
 ./run.sh idea.json --env modal --gpus 1 --artifact-sync-interval 120
 ```
@@ -47,7 +48,7 @@ claude
 > Read idea.json and conduct this research
 ```
 
-All skills (`/search-papers`, `/review-paper`) work against the local filesystem. No isolation — artifacts write directly to the repo directory.
+The `/search-papers` skill and `scripts/submit_for_review.sh` work against the local filesystem. No isolation — artifacts write directly to the repo directory.
 
 ## Architecture
 
@@ -59,8 +60,7 @@ ai_scientist_v3/
 │       ├── search-papers/                  # /search-papers — 3-API stack (S2, OpenReview, CrossRef)
 │       │   ├── SKILL.md
 │       │   └── reference.md               # Full API endpoint reference
-│       └── review-paper/                   # /review-paper — structured NeurIPS-format review
-│           ├── SKILL.md
+│       └── review-paper/
 │           ├── scripts/                    # LaTeX extraction + questions API
 │           └── examples/                   # Fewshot calibration reviews
 ├── harbor-task/
@@ -70,7 +70,9 @@ ai_scientist_v3/
 │   │   ├── Dockerfile.cpu                  # python:3.12-slim + LaTeX + scikit-learn
 │   │   └── Dockerfile.gpu                  # pytorch + CUDA + LaTeX + scikit-learn
 │   └── tests/test.sh                       # Verifier (checks artifacts, produces reward)
-├── scripts/compile_latex.sh                # pdflatex + bibtex + chktex
+├── scripts/
+│   ├── compile_latex.sh                   # pdflatex + bibtex + chktex
+│   └── submit_for_review.sh              # External review API + versioned snapshot
 ├── blank_icbinb_latex/                     # ICLR 2025 workshop LaTeX template
 ├── fewshot_examples/                       # Example reviews for calibration
 └── docs/                                   # Claude Code documentation reference
@@ -96,6 +98,25 @@ Source templates are never modified — `run.sh` generates `instruction.md` and 
 
 This bakes the previous run's artifacts into the new container and injects a "Resumed Session" section so the agent continues rather than starts over.
 
+### GPU Support
+
+`--gpus N` works with both local Docker and Modal:
+
+```bash
+# Local Docker — requires NVIDIA Container Toolkit
+./run.sh idea.json --gpus 1
+
+# Modal cloud
+./run.sh idea.json --env modal --gpus 1
+```
+
+When `--gpus` is specified:
+- `Dockerfile.gpu` is used instead of `Dockerfile.cpu` (base image: `pytorch/pytorch` with CUDA + PyTorch pre-installed)
+- For local Docker, NVIDIA Container Toolkit must be installed ([install guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html))
+- For Modal, GPUs are provisioned from the cloud — no local GPU required
+
+The agent auto-detects GPU availability inside the container and adjusts experiments accordingly.
+
 ### Viewing Job Results
 
 ```bash
@@ -113,7 +134,8 @@ The agent receives a research idea and autonomously:
 5. Runs ablation studies
 6. Generates publication-quality plots
 7. Writes a complete paper using the LaTeX template
-8. Uses `/review-paper` for a structured self-review (extraction + questions API + calibrated scoring)
+8. Submits for external review via `scripts/submit_for_review.sh` (calls reviewer API, creates versioned snapshot)
+9. Reads reviewer questions, iterates on experiments and paper, resubmits
 
 No hardcoded stages. No tree data structure. No Python orchestration. The agent decides what to do and when, using its own scientific judgment.
 

@@ -27,8 +27,9 @@ COPY scripts/ /app/scripts/
 COPY .claude/ /app/.claude/
 
 # Create workspace structure and pre-fill LaTeX template
-RUN mkdir -p /app/experiment_results /app/figures /app/latex && \
-    cp -r /app/blank_icbinb_latex/* /app/latex/
+RUN mkdir -p /app/experiment_results /app/figures /app/latex /app/submissions && \
+    cp -r /app/blank_icbinb_latex/* /app/latex/ && \
+    chmod +x /app/scripts/submit_for_review.sh
 
 # Copy previous artifacts if resuming (always exists, may be empty)
 COPY prev_artifacts/ /app/prev_artifacts/
@@ -39,6 +40,7 @@ RUN set +e; \
         cp /app/prev_artifacts/paper.tex /app/latex/template.tex 2>/dev/null; \
         cp /app/prev_artifacts/paper.pdf /app/latex/template.pdf 2>/dev/null; \
         cp /app/prev_artifacts/review.json /app/review.json 2>/dev/null; \
+        cp -r /app/prev_artifacts/submissions/* /app/submissions/ 2>/dev/null; \
         # Restore dependencies from previous run's snapshot
         if [ -f /app/prev_artifacts/requirements.txt ]; then \
             uv pip install --system --no-cache -r /app/prev_artifacts/requirements.txt 2>/dev/null; \

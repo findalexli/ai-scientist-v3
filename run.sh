@@ -5,6 +5,7 @@
 #
 # Examples:
 #   ./run.sh idea.json                                                # Local Docker, CPU
+#   ./run.sh idea.json --gpus 1                                       # Local Docker, GPU
 #   ./run.sh idea.json --model anthropic/claude-sonnet-4-5-20250929   # Use Sonnet
 #   ./run.sh idea.json --env modal                                    # Modal cloud, CPU
 #   ./run.sh idea.json --env modal --gpus 1                           # Modal cloud, GPU
@@ -70,7 +71,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --timeout SECS             Agent timeout in seconds (default: 7200)"
             echo "  --resume-from JOB_PATH     Resume from a previous run's artifacts"
             echo "  --env ENV                  Environment: docker (default) or modal"
-            echo "  --gpus N                   Number of GPUs (default: 0, requires --env modal)"
+            echo "  --gpus N                   Number of GPUs (default: 0, works with local Docker and Modal)"
             echo "  --modal-secret NAME        Modal secret name (default: harbor-env)"
             echo "  --use-upstream-agent       Use Harbor's built-in claude-code agent"
             echo "  --artifact-sync-interval S Artifact sync interval in seconds (default: 180)"
@@ -99,10 +100,17 @@ if [[ ! -f "$IDEA_JSON" ]]; then
     exit 1
 fi
 
-# Validate: GPUs require Modal
+# Validate and setup local GPU support
 if [[ "$GPUS" != "0" && "$ENV_TYPE" != "modal" ]]; then
-    echo "Error: --gpus requires --env modal (local Docker does not support GPUs)" >&2
-    exit 1
+    # Check if nvidia runtime is available for local Docker
+    if ! docker info 2>/dev/null | grep -q "nvidia"; then
+        echo "Error: --gpus requires NVIDIA Container Toolkit (nvidia-docker)" >&2
+        echo "Install: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html" >&2
+        exit 1
+    fi
+    # Patch Harbor for local GPU support (idempotent)
+    python3 -c "from local_harbor_agents import ensure_gpu_support; ensure_gpu_support(quiet=True)" 2>/dev/null || \
+        PYTHONPATH="$SCRIPT_DIR" python3 -c "from local_harbor_agents import ensure_gpu_support; ensure_gpu_support(quiet=True)"
 fi
 
 if ! [[ "$ARTIFACT_SYNC_INTERVAL" =~ ^[0-9]+$ ]] || [[ "$ARTIFACT_SYNC_INTERVAL" -lt 30 ]]; then
@@ -115,14 +123,17 @@ ENV_DIR="$SCRIPT_DIR/harbor-task/environment"
 INSTRUCTION_TEMPLATE="$SCRIPT_DIR/harbor-task/instruction.md.template"
 INSTRUCTION_OUT="$SCRIPT_DIR/harbor-task/instruction.md"
 
-# --- Load .env into the current shell so harbor/agent can read them ---
-for env_file in "$SCRIPT_DIR/../.env" "$SCRIPT_DIR/.env"; do
+# --- Load .env into the current shell so harbor/agent can read them (optional) ---
+for env_file in "$SCRIPT_DIR/.env" "$SCRIPT_DIR/../.env"; do
     if [[ -f "$env_file" ]]; then
-        echo "Loading env from $env_file"
-        set -a
-        source "$env_file"
-        set +a
-        break
+        # Only source if file has valid bash syntax (VAR=value, no spaces around =)
+        if bash -n "$env_file" 2>/dev/null; then
+            echo "Loading env from $env_file"
+            set -a
+            source "$env_file"
+            set +a
+            break
+        fi
     fi
 done
 
@@ -163,7 +174,9 @@ if [[ -n "$RESUME_FROM" ]]; then
 fi
 
 # --- Copy .env into the build context so docker-compose env_file picks it up ---
-for env_file in "$SCRIPT_DIR/../.env" "$SCRIPT_DIR/.env"; do
+# Uses same order as shell sourcing: project dir first, then parent dir
+# For Modal: env vars come from Modal secrets, not .env file
+for env_file in "$SCRIPT_DIR/.env" "$SCRIPT_DIR/../.env"; do
     if [[ -f "$env_file" ]]; then
         cp "$env_file" "$ENV_DIR/.env"
         break
@@ -216,6 +229,8 @@ if [[ -n "$PREV_ARTIFACTS" ]]; then
     [[ -f "$PREV_ARTIFACTS/paper.pdf" ]] && EXISTING="$EXISTING\n- paper.pdf"
     [[ -f "$PREV_ARTIFACTS/paper.tex" ]] && EXISTING="$EXISTING\n- paper.tex"
     [[ -f "$PREV_ARTIFACTS/review.json" ]] && EXISTING="$EXISTING\n- review.json"
+    [[ -d "$PREV_ARTIFACTS/submissions" ]] && \
+        EXISTING="$EXISTING\n- submissions/ ($(ls "$PREV_ARTIFACTS/submissions/" 2>/dev/null | grep -c '^v') versions)"
 
     RESUME_NOTE="
 ## Resumed Session
@@ -271,7 +286,7 @@ if [[ "$ENV_TYPE" == "modal" ]]; then
     HARBOR_ARGS+=(--ek "secrets=[\"$MODAL_SECRET\"]")
 fi
 
-# GPU support (Modal attaches GPUs at infra level, same Docker image)
+# GPU support (works for both local Docker and Modal)
 if [[ "$GPUS" != "0" ]]; then
     HARBOR_ARGS+=(--override-gpus "$GPUS")
 fi

@@ -88,6 +88,7 @@ sync_artifacts() {{
         copy_file "/app/latex/template.tex" "paper.tex"
         copy_file "/app/latex/references.bib" "references.bib"
         copy_file "/app/review.json" "review.json"
+        copy_tree "/app/submissions" "submissions"
         copy_file "/app/requirements.txt" "requirements.txt"
         copy_tree "$SESSIONS_DIR/projects" "claude_sessions/projects"
         copy_tree "$SESSIONS_DIR/todos" "claude_sessions/todos"

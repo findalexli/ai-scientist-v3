@@ -41,7 +41,7 @@ cd ai_scientist_v3
 claude
 ```
 
-All skills (`/search-papers`, `/review-paper`) work against the local filesystem. No isolation — artifacts write directly to the repo directory.
+The `/search-papers` skill and `scripts/submit_for_review.sh` work against the local filesystem. No isolation — artifacts write directly to the repo directory.
 
 ## Project Structure
 
@@ -49,6 +49,7 @@ All skills (`/search-papers`, `/review-paper`) work against the local filesystem
 - `fewshot_examples/` — Example paper reviews for calibrating the review skill
 - `scripts/` — Helper scripts:
   - `compile_latex.sh` — LaTeX compilation (pdflatex + bibtex + chktex)
+  - `submit_for_review.sh` — Submit paper to external reviewer model + create versioned snapshot
 - `harbor-task/` — Harbor task definition:
   - `instruction.md.template` — Research prompt template (`{{IDEA_CONTENT}}` placeholder)
   - `instruction.md` — Generated at runtime by `run.sh` (not checked in)
@@ -67,6 +68,7 @@ Inside the Harbor container, the workspace is at `/app/`:
 - `/app/latex/` — Pre-filled ICLR 2025 template
 - `/app/scripts/` — compile_latex.sh
 - `/app/fewshot_examples/` — Review calibration examples
+- `/app/submissions/` — Versioned snapshots (created by `submit_for_review.sh`)
 
 For local development outside Harbor:
 - Load API keys from `.env` in the project root: `source .env` (or `set -a; source .env; set +a`)
@@ -90,6 +92,7 @@ cp latex/template.pdf /logs/agent/artifacts/paper.pdf
 cp latex/template.tex /logs/agent/artifacts/paper.tex
 cp latex/references.bib /logs/agent/artifacts/references.bib 2>/dev/null
 cp review.json /logs/agent/artifacts/
+cp -r submissions/ /logs/agent/artifacts/submissions/ 2>/dev/null
 ```
 
 These persist to `jobs/<job-id>/<trial>/agent/artifacts/` on the host. The verifier (`test.sh`) also copies artifacts to both `agent/artifacts/` and `verifier/artifacts/` as a safety net.
@@ -112,6 +115,8 @@ These persist to `jobs/<job-id>/<trial>/agent/artifacts/` on the host. The verif
 - Plots: `figures/*.png` (publication quality, max 12, 150+ DPI, `bbox_inches='tight'`, colorblind-friendly palettes, no underscores in labels, error bars when multiple runs exist, visually inspect each PNG with `Read` tool before finalizing)
 - Paper: `latex/template.tex` → compiled to PDF
 - Review: `review.json` (structured NeurIPS format)
+- Versioned snapshots: `submissions/v{N}_{timestamp}/` (created by `submit_for_review.sh`)
+- Version history: `submissions/version_log.json`
 
 ### Experiment Guidelines
 - Use `uv pip install --system` (preferred over pip — faster)

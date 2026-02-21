@@ -14,9 +14,10 @@ Your workspace is pre-configured:
 - `figures/` — Save publication-quality plots here
 - `latex/` — Pre-filled with the ICLR 2025 workshop template. Fill it in.
 - `scripts/compile_latex.sh` — Compile your paper: `bash scripts/compile_latex.sh latex/`
+- `scripts/submit_for_review.sh` — Submit paper for external review + create versioned snapshot
+- `submissions/` — Versioned snapshots (created automatically by `submit_for_review.sh`)
 - `fewshot_examples/` — Review calibration examples
 - Use `/search-papers` to find related work, get BibTeX, and check novelty
-- Use `/review-paper` to conduct a structured self-review with the questions generation model
 - `blank_icbinb_latex/` — Clean template (already copied to latex/)
 
 You have full access to the container. Use whatever tools and resources you need:
@@ -38,12 +39,32 @@ Follow this research process:
 2. **Experiment Design** — Set up your experiments however you see fit. Clone repos, download datasets, install packages — use the right tools for the job.
 3. **Run Experiments** — Use your best judgment on methodology: baselines, ablations, statistical rigor appropriate to the claims.
 4. **Plot Results** — Create publication-quality figures in `figures/`.
-5. **Write Paper** — Fill in `latex/template.tex`. Compile with `bash scripts/compile_latex.sh latex/`.
-6. **Self-Review** — Use `/review-paper` to conduct a structured review. This runs the extraction script and questions generation model, then produces `review.json`.
+5. **Write Paper** — Fill in `latex/template.tex`. Compile with `bash scripts/compile_latex.sh latex/`. Must be 4 pages of main text (excluding references and appendix) for the ICLR workshop format.
+6. **Submit for Review** — Run the external reviewer model:
+   ```bash
+   bash scripts/submit_for_review.sh latex/template.tex
+   ```
+   This calls the external reviewer API to generate questions about your paper, saves the raw response, and creates a versioned snapshot in `submissions/v{N}_{timestamp}/`.
+   Use `timeout: 180000` (3 minutes) for the Bash tool call since the API takes ~30 seconds.
+7. **Read Reviewer Feedback** — Read the reviewer's questions:
+   ```bash
+   cat submissions/v{N}_{timestamp}/reviewer_communications/response.json
+   ```
+   The path is printed by the script. The response contains `extracted_text` and `question` fields.
+8. **Iterate** — Address the reviewer's questions and weaknesses:
+   - Run additional experiments if needed
+   - Improve the paper in `latex/template.tex`
+   - Recompile with `bash scripts/compile_latex.sh latex/`
+   - Submit again with `bash scripts/submit_for_review.sh latex/template.tex` → creates the next version
+   - Repeat until the reviewer's questions are satisfactorily addressed.
 
+## Version Management
 
-Feel free to go back and forth as the nature of the research redeem. For instance, you might wanna check literature again after getting some results. If after checking the plots, and review the plots, experiment results or after doing self-review, if you like to continue to iterate, do so. You have complete autonomy to iterate.
-
+- **Version numbers are managed automatically** by `submit_for_review.sh` — never create version numbers manually
+- Each call to `submit_for_review.sh` creates `submissions/v{N}_{timestamp}/` with a frozen copy of the paper, experiments, figures, and reviewer feedback
+- The working directories (`latex/`, `experiment_results/`, `figures/`) remain mutable — always edit there, never in `submissions/`
+- To see version history: read `submissions/version_log.json`
+- To compare with previous versions: read `submissions/v{N}_{timestamp}/paper.tex`
 
 ## Deliverables
 
@@ -55,7 +76,7 @@ cp -r figures/ /logs/agent/artifacts/
 cp latex/template.pdf /logs/agent/artifacts/paper.pdf
 cp latex/template.tex /logs/agent/artifacts/paper.tex
 cp latex/references.bib /logs/agent/artifacts/references.bib 2>/dev/null
-cp review.json /logs/agent/artifacts/
+cp -r submissions/ /logs/agent/artifacts/submissions/ 2>/dev/null
 ```
 
 **Important:** Save artifacts incrementally throughout the run — don't wait until the end. After each major milestone (experiments done, plots done, paper compiled), copy what you have so far to `/logs/agent/artifacts/`. This ensures partial work is preserved if the run times out.
@@ -67,5 +88,5 @@ cp review.json /logs/agent/artifacts/
 - Experimental rigor appropriate to the claims (proper baselines, controls, statistical tests as needed)
 - Publication-quality plots (labeled axes, legends, readable fonts)
 - Paper compiles without errors, reads well, 4-page main text limit
-- Self-review with structured JSON in review.json
+- At least one submission through `scripts/submit_for_review.sh` with reviewer feedback addressed
 - All results must be real — never hallucinate numbers
