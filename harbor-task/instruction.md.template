@@ -7,68 +7,10 @@ publication-ready research paper.
 
 {{IDEA_CONTENT}}
 {{RESUME_CONTEXT}}
-## Workspace
+## Artifact Collection
 
-Your workspace is pre-configured:
-- `experiment_results/` — Save experiment code and results here
-- `figures/` — Save publication-quality plots here
-- `latex/` — Pre-filled with the ICLR 2025 workshop template. Fill it in.
-- `scripts/compile_latex.sh` — Compile your paper: `bash scripts/compile_latex.sh latex/`
-- `scripts/submit_for_review.sh` — Submit paper for external review + create versioned snapshot
-- `submissions/` — Versioned snapshots (created automatically by `submit_for_review.sh`)
-- `fewshot_examples/` — Review calibration examples
-- Use `/search-papers` to find related work, get BibTeX, and check novelty
-- `blank_icbinb_latex/` — Clean template (already copied to latex/)
+Save artifacts incrementally throughout the run — don't wait until the end. After each major milestone (experiments done, plots done, paper compiled, review received), copy what you have so far:
 
-You have full access to the container. Use whatever tools and resources you need:
-- `git clone` any relevant open-source repositories into experiment_results. It might make sense to build on top of other forks repo, instead of writing things from scratch.
-- 'uv install' (priorize uv as it is faster than pip) `pip install` / `apt-get install` additional packages
-- Download datasets from HuggingFace (`huggingface-cli download` or `datasets` library), Kaggle, UCI ML repo, OpenML, or any public source
-- Use any language or framework — not limited to Python
-
-API keys available via environment variables (if configured):
-- `HF_TOKEN` — HuggingFace (for gated models/datasets)
-- `KAGGLE_USERNAME` / `KAGGLE_KEY` — Kaggle API
-- `S2_API_KEY` — Semantic Scholar (higher rate limits)
-
-## Process
-
-Follow this research process:
-
-1. **Literature Review** — Use `/search-papers` to find related work. Understand the state of the art.
-2. **Experiment Design** — Set up your experiments however you see fit. Clone repos, download datasets, install packages — use the right tools for the job.
-3. **Run Experiments** — Use your best judgment on methodology: baselines, ablations, statistical rigor appropriate to the claims.
-4. **Plot Results** — Create publication-quality figures in `figures/`.
-5. **Write Paper** — Fill in `latex/template.tex`. Compile with `bash scripts/compile_latex.sh latex/`. Must be 4 pages of main text (excluding references and appendix) for the ICLR workshop format.
-6. **Submit for Review** — Run the external reviewer model:
-   ```bash
-   bash scripts/submit_for_review.sh latex/template.tex
-   ```
-   This calls the external reviewer API to generate questions about your paper, saves the raw response, and creates a versioned snapshot in `submissions/v{N}_{timestamp}/`.
-   Use `timeout: 180000` (3 minutes) for the Bash tool call since the API takes ~30 seconds.
-7. **Read Reviewer Feedback** — Read the reviewer's questions:
-   ```bash
-   cat submissions/v{N}_{timestamp}/reviewer_communications/response.json
-   ```
-   The path is printed by the script. The response contains `extracted_text` and `question` fields.
-8. **Iterate** — Address the reviewer's questions and weaknesses:
-   - Run additional experiments if needed
-   - Improve the paper in `latex/template.tex`
-   - Recompile with `bash scripts/compile_latex.sh latex/`
-   - Submit again with `bash scripts/submit_for_review.sh latex/template.tex` → creates the next version
-   - Repeat until the reviewer's questions are satisfactorily addressed.
-
-## Version Management
-
-- **Version numbers are managed automatically** by `submit_for_review.sh` — never create version numbers manually
-- Each call to `submit_for_review.sh` creates `submissions/v{N}_{timestamp}/` with a frozen copy of the paper, experiments, figures, and reviewer feedback
-- The working directories (`latex/`, `experiment_results/`, `figures/`) remain mutable — always edit there, never in `submissions/`
-- To see version history: read `submissions/version_log.json`
-- To compare with previous versions: read `submissions/v{N}_{timestamp}/paper.tex`
-
-## Deliverables
-
-When done, copy final artifacts to `/logs/agent/artifacts/` (this directory is bind-mounted to the host):
 ```bash
 mkdir -p /logs/agent/artifacts
 cp -r experiment_results/ /logs/agent/artifacts/
@@ -79,14 +21,8 @@ cp latex/references.bib /logs/agent/artifacts/references.bib 2>/dev/null
 cp -r submissions/ /logs/agent/artifacts/submissions/ 2>/dev/null
 ```
 
-**Important:** Save artifacts incrementally throughout the run — don't wait until the end. After each major milestone (experiments done, plots done, paper compiled), copy what you have so far to `/logs/agent/artifacts/`. This ensures partial work is preserved if the run times out.
+This ensures partial work is preserved if the run times out.
 
-> Note: Only `/logs/agent/` and `/logs/verifier/` are mounted to the host. Do NOT write to `/logs/artifacts/` — it is ephemeral and will be lost.
+> **Warning:** Only `/logs/agent/` and `/logs/verifier/` are mounted to the host. Do NOT write to `/logs/artifacts/` or any other `/logs/` subpath — they are ephemeral and will be lost.
 
-## Quality Bar
-
-- Experimental rigor appropriate to the claims (proper baselines, controls, statistical tests as needed)
-- Publication-quality plots (labeled axes, legends, readable fonts)
-- Paper compiles without errors, reads well, 4-page main text limit
-- At least one submission through `scripts/submit_for_review.sh` with reviewer feedback addressed
-- All results must be real — never hallucinate numbers
+Follow the research process defined in your project instructions (CLAUDE.md).
