@@ -174,12 +174,7 @@ mkdir -p "$DATA_DIR"
 
 # Create per-job temp copy of harbor-task so concurrent jobs don't share staging dirs
 TASK_DIR_TEMPLATE="$SCRIPT_DIR/harbor-task"
-# mktemp generates mixed-case suffixes but Docker requires lowercase image names,
-# and Harbor derives image names from the task directory name.
 TASK_DIR=$(mktemp -d "/tmp/harbor-task-XXXXXX")
-TASK_DIR_LC=$(echo "$TASK_DIR" | tr '[:upper:]' '[:lower:]')
-[ "$TASK_DIR" != "$TASK_DIR_LC" ] && mv "$TASK_DIR" "$TASK_DIR_LC"
-TASK_DIR="$TASK_DIR_LC"
 cp -r "$TASK_DIR_TEMPLATE"/* "$TASK_DIR/"
 
 ENV_DIR="$TASK_DIR/environment"
