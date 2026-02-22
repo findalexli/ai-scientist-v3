@@ -22,7 +22,7 @@ section "1. No stale experiment_results references in tracked files"
 # ---------------------------------------------------------------------------
 
 # Get list of tracked files that still reference experiment_results
-STALE=$(git -C "$REPO_ROOT" grep -l "experiment_results" -- ':!interactive_run/' ':!jobs/' ':!*.md.template.bak' 2>/dev/null || true)
+STALE=$(git -C "$REPO_ROOT" grep -l "experiment_results" -- ':!interactive_run/' ':!jobs/' ':!*.md.template.bak' ':!tests/test_infrastructure.sh' 2>/dev/null || true)
 if [ -z "$STALE" ]; then
     pass "No tracked files reference experiment_results"
 else
