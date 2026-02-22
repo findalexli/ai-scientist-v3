@@ -145,9 +145,15 @@ done
 DATA_DIR="${DATA_DIR:-$SCRIPT_DIR/data}"
 export DATA_DIR
 mkdir -p "$DATA_DIR"
-ENV_DIR="$SCRIPT_DIR/harbor-task/environment"
-INSTRUCTION_TEMPLATE="$SCRIPT_DIR/harbor-task/instruction.md.template"
-INSTRUCTION_OUT="$SCRIPT_DIR/harbor-task/instruction.md"
+
+# Create per-job temp copy of harbor-task so concurrent jobs don't share staging dirs
+TASK_DIR_TEMPLATE="$SCRIPT_DIR/harbor-task"
+TASK_DIR=$(mktemp -d "/tmp/harbor-task-XXXXXX")
+cp -r "$TASK_DIR_TEMPLATE"/* "$TASK_DIR/"
+
+ENV_DIR="$TASK_DIR/environment"
+INSTRUCTION_TEMPLATE="$TASK_DIR/instruction.md.template"
+INSTRUCTION_OUT="$TASK_DIR/instruction.md"
 
 # --- Resolve previous artifacts if resuming ---
 PREV_ARTIFACTS=""
@@ -201,7 +207,7 @@ cp -rL "$SCRIPT_DIR/blank_icbinb_latex" "$ENV_DIR/blank_icbinb_latex"
 cp -rL "$SCRIPT_DIR/scripts"            "$ENV_DIR/scripts"
 cp -rL "$SCRIPT_DIR/.claude"            "$ENV_DIR/.claude"
 
-# Always create prev_artifacts dir with a placeholder file.
+# Always create a fresh prev_artifacts dir with a placeholder file.
 # Modal's builder omits empty directories from the build context, which causes
 # COPY prev_artifacts/ to fail. The placeholder ensures the dir is non-empty.
 mkdir -p "$ENV_DIR/prev_artifacts"
@@ -219,12 +225,7 @@ else
 fi
 
 cleanup() {
-    rm -rf "$ENV_DIR/blank_icbinb_latex" \
-           "$ENV_DIR/scripts" "$ENV_DIR/.claude" "$ENV_DIR/.env" \
-           "$ENV_DIR/prev_artifacts"
-    # Remove generated files (sources are never modified)
-    rm -f "$ENV_DIR/Dockerfile"
-    rm -f "$INSTRUCTION_OUT"
+    rm -rf "$TASK_DIR"
 }
 trap cleanup EXIT
 
@@ -283,7 +284,7 @@ TIMEOUT_MULTIPLIER=$(python3 -c "print($TIMEOUT / $TASK_TOML_TIMEOUT)")
 
 HARBOR_ARGS=(
     harbor run
-    -p "$SCRIPT_DIR/harbor-task/"
+    -p "$TASK_DIR/"
     -m "$MODEL"
     --timeout-multiplier "$TIMEOUT_MULTIPLIER"
     --ak "timeout_sec=$TIMEOUT"
