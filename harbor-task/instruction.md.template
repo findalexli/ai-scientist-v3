@@ -46,4 +46,4 @@ This ensures partial work is preserved if the run times out.
 
 > **Warning:** Only `/logs/agent/` and `/logs/verifier/` are mounted to the host. Do NOT write to `/logs/artifacts/` or any other `/logs/` subpath — they are ephemeral and will be lost.
 
-Follow the research process defined in your project instructions (CLAUDE.md).
+Follow the research process defined in your project instructions.

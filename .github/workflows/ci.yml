@@ -19,5 +19,11 @@ jobs:
       - name: Infrastructure tests
         run: bash tests/test_infrastructure.sh
 
+      - name: Run.sh argument parsing tests
+        run: bash tests/test_run_sh.sh
+
+      - name: Patched agent unit tests
+        run: python3 tests/test_patched_agents.py -v
+
       - name: Run isolation tests
         run: bash tests/test_run_isolation.sh

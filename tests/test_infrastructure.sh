@@ -190,6 +190,50 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+section "9. Gemini CLI support"
+# ---------------------------------------------------------------------------
+
+PATCHED_GEMINI="$REPO_ROOT/local_harbor_agents/patched_gemini_cli.py"
+
+if [ -f "$PATCHED_GEMINI" ]; then
+    pass "patched_gemini_cli.py exists"
+else
+    fail "patched_gemini_cli.py does not exist"
+fi
+
+if grep -q '"experiment_codebase"' "$PATCHED_GEMINI" 2>/dev/null; then
+    pass "patched_gemini_cli.py syncs experiment_codebase"
+else
+    fail "patched_gemini_cli.py does NOT sync experiment_codebase"
+fi
+
+if grep -q 'gemini_sessions' "$PATCHED_GEMINI" 2>/dev/null; then
+    pass "patched_gemini_cli.py syncs gemini_sessions"
+else
+    fail "patched_gemini_cli.py does NOT sync gemini_sessions"
+fi
+
+INIT_PY="$REPO_ROOT/local_harbor_agents/__init__.py"
+if grep -q "PatchedClaudeCode" "$INIT_PY" && grep -q "PatchedGeminiCli" "$INIT_PY"; then
+    pass "__init__.py exports both PatchedClaudeCode and PatchedGeminiCli"
+else
+    fail "__init__.py does not export both patched agents"
+fi
+
+if grep -q "\-\-agent" "$REPO_ROOT/run.sh" 2>/dev/null; then
+    pass "run.sh supports --agent flag"
+else
+    fail "run.sh does NOT support --agent flag"
+fi
+
+TEMPLATE="$REPO_ROOT/harbor-task/instruction.md.template"
+if grep -q "(CLAUDE.md)" "$TEMPLATE" 2>/dev/null; then
+    fail "instruction.md.template still has agent-specific (CLAUDE.md) reference"
+else
+    pass "instruction.md.template is agent-agnostic (no CLAUDE.md parenthetical)"
+fi
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 

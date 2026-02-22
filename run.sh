@@ -11,11 +11,13 @@
 #   ./run.sh idea.json --env modal --gpus 1                           # Modal cloud, GPU
 #   ./run.sh idea.json --env modal --gpus 1 --timeout 7200            # Modal, GPU, 2hr
 #   ./run.sh idea.json --resume-from jobs/2026-02-14__12-10-51/       # Resume previous
+#   ./run.sh idea.json --agent gemini-cli                             # Gemini CLI agent
+#   ./run.sh idea.json --agent gemini-cli --model google/gemini-3.1-pro-preview  # Gemini + custom model
 
 set -euo pipefail
 
 IDEA_JSON=""
-MODEL="anthropic/claude-opus-4-6"
+MODEL=""           # empty = auto-select based on agent type
 TIMEOUT="7200"
 RESUME_FROM=""
 ENV_TYPE=""        # empty = docker (default)
@@ -23,7 +25,8 @@ GPUS="0"
 MODAL_SECRET="harbor-env"
 USE_UPSTREAM_AGENT="0"
 ARTIFACT_SYNC_INTERVAL="180"
-PATCHED_AGENT_IMPORT_PATH="local_harbor_agents.patched_claude_code:PatchedClaudeCode"
+AGENT_TYPE="claude-code"
+PATCHED_AGENT_IMPORT_PATH=""  # set after arg parsing based on AGENT_TYPE
 FEEDBACK=""
 
 # Parse arguments
@@ -61,6 +64,10 @@ while [[ $# -gt 0 ]]; do
             ARTIFACT_SYNC_INTERVAL="$2"
             shift 2
             ;;
+        --agent)
+            AGENT_TYPE="$2"
+            shift 2
+            ;;
         --feedback)
             FEEDBACK="$2"
             shift 2
@@ -72,13 +79,14 @@ while [[ $# -gt 0 ]]; do
             echo "  idea.json                  Path to research idea JSON file"
             echo ""
             echo "Options:"
-            echo "  --model MODEL              LLM model (default: anthropic/claude-opus-4-6)"
+            echo "  --agent TYPE               Agent: claude-code (default) or gemini-cli"
+            echo "  --model MODEL              LLM model (auto-selected per agent if omitted)"
             echo "  --timeout SECS             Agent timeout in seconds (default: 7200)"
             echo "  --resume-from JOB_PATH     Resume from a previous run's artifacts"
             echo "  --env ENV                  Environment: docker (default) or modal"
             echo "  --gpus N                   Number of GPUs (default: 0, works with local Docker and Modal)"
             echo "  --modal-secret NAME        Modal secret name (default: harbor-env)"
-            echo "  --use-upstream-agent       Use Harbor's built-in claude-code agent"
+            echo "  --use-upstream-agent       Use Harbor's built-in agent (no artifact sync)"
             echo "  --artifact-sync-interval S Artifact sync interval in seconds (default: 180)"
             echo "  --feedback TEXT            Feedback/notes to include in the instruction"
             exit 0
@@ -105,6 +113,24 @@ if [[ ! -f "$IDEA_JSON" ]]; then
     echo "Error: $IDEA_JSON not found" >&2
     exit 1
 fi
+
+# --- Resolve agent type defaults ---
+case "$AGENT_TYPE" in
+    claude-code)
+        [[ -z "$MODEL" ]] && MODEL="anthropic/claude-opus-4-6"
+        PATCHED_AGENT_IMPORT_PATH="local_harbor_agents.patched_claude_code:PatchedClaudeCode"
+        UPSTREAM_AGENT_FLAG="claude-code"
+        ;;
+    gemini-cli)
+        [[ -z "$MODEL" ]] && MODEL="google/gemini-3.1-pro-preview"
+        PATCHED_AGENT_IMPORT_PATH="local_harbor_agents.patched_gemini_cli:PatchedGeminiCli"
+        UPSTREAM_AGENT_FLAG="gemini-cli"
+        ;;
+    *)
+        echo "Error: unknown agent type '$AGENT_TYPE' (use claude-code or gemini-cli)" >&2
+        exit 1
+        ;;
+esac
 
 # Validate and setup local GPU support
 if [[ "$GPUS" != "0" && "$ENV_TYPE" != "modal" ]]; then
@@ -292,7 +318,7 @@ HARBOR_ARGS=(
 )
 
 if [[ "$USE_UPSTREAM_AGENT" == "1" ]]; then
-    HARBOR_ARGS+=(-a claude-code)
+    HARBOR_ARGS+=(-a "$UPSTREAM_AGENT_FLAG")
 else
     HARBOR_ARGS+=(--agent-import-path "$PATCHED_AGENT_IMPORT_PATH")
     HARBOR_ARGS+=(--ak "artifact_sync_interval_sec=$ARTIFACT_SYNC_INTERVAL")
@@ -319,9 +345,9 @@ echo "  Model:   $MODEL"
 echo "  Timeout: ${TIMEOUT}s"
 echo "  Env:     ${ENV_TYPE:-docker}"
 if [[ "$USE_UPSTREAM_AGENT" == "1" ]]; then
-    echo "  Agent:   claude-code (upstream)"
+    echo "  Agent:   $AGENT_TYPE (upstream)"
 else
-    echo "  Agent:   PatchedClaudeCode (local import)"
+    echo "  Agent:   $AGENT_TYPE (patched, local import)"
     echo "  Sync:    ${ARTIFACT_SYNC_INTERVAL}s"
 fi
 if [[ "$GPUS" != "0" ]]; then
