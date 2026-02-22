@@ -42,6 +42,13 @@ else
     fail "run.sh does NOT copy template to temp dir"
 fi
 
+# Docker requires lowercase image names; Harbor derives names from the task dir
+if grep -q "tr '\[:upper:\]' '\[:lower:\]'" "$RUN_SH" 2>/dev/null; then
+    pass "run.sh lowercases temp dir name for Docker compatibility"
+else
+    fail "run.sh does NOT lowercase temp dir name (Docker requires lowercase image names)"
+fi
+
 # ---------------------------------------------------------------------------
 section "2. Derived paths use temp dir, not shared harbor-task"
 # ---------------------------------------------------------------------------

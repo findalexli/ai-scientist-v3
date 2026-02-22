@@ -23,22 +23,39 @@ v2 used ~5000 lines of Python to orchestrate a 4-stage BFS tree search with hard
 ### Harbor Mode (Isolated Docker)
 
 ```bash
-./run.sh idea.json                                                # Default: Opus 4.6, 2hr timeout
+./run.sh idea.json                                                # Default: Claude Opus 4.6, 2hr timeout
 ./run.sh idea.json --model anthropic/claude-sonnet-4-5-20250929   # Use Sonnet
+./run.sh idea.json --agent gemini-cli                             # Use Gemini CLI
+./run.sh idea.json --agent gemini-cli --model google/gemini-3.1-pro-preview  # Gemini + custom model
 ./run.sh idea.json --timeout 7200                                 # 2hr timeout
 ./run.sh idea.json --gpus 1                                       # Local Docker with GPU
 ./run.sh idea.json --env modal --gpus 1                           # Modal cloud with GPU
 ./run.sh idea.json --env modal --gpus 1 --artifact-sync-interval 120
 ```
 
-By default, `run.sh` uses a local patched Claude agent (via `--agent-import-path`) to
-improve Modal reliability without modifying Harbor source code:
-- picks the primary Claude session log even when subagent logs exist
+### Agent Selection
+
+The `--agent` flag selects which coding agent runs inside the container:
+
+| Agent | Flag | Default Model |
+|-------|------|---------------|
+| Claude Code | `--agent claude-code` (default) | `anthropic/claude-opus-4-6` |
+| Gemini CLI | `--agent gemini-cli` | `google/gemini-3.1-pro-preview` |
+
+Both agents use the same Harbor infrastructure (Dockerfiles, instruction template, artifact syncing). The `--model` flag overrides the default model for either agent.
+
+**Required environment variables:**
+- Claude Code: `ANTHROPIC_API_KEY`
+- Gemini CLI: `GEMINI_API_KEY` or `GOOGLE_API_KEY` (or GCP service account via `GOOGLE_APPLICATION_CREDENTIALS`)
+
+By default, `run.sh` uses a local patched agent (via `--agent-import-path`) to
+improve reliability without modifying Harbor source code:
 - syncs artifacts to `/logs/agent/artifacts` and `/logs/verifier/artifacts` periodically
   and again on `TERM/EXIT` (critical for timeout cases)
-- includes Claude session logs in artifacts (`claude_sessions/`), including subagent traces
+- includes agent session logs in artifacts (`claude_sessions/` or `gemini_sessions/`)
+- (Claude only) picks the primary session log even when subagent logs exist
 
-Use `--use-upstream-agent` if you want Harbor's built-in `claude-code` agent behavior.
+Use `--use-upstream-agent` if you want Harbor's built-in agent behavior (no artifact sync).
 
 ### Interactive Mode (No Docker)
 
@@ -83,7 +100,7 @@ Each experiment runs in an isolated Docker container via Harbor:
 
 1. `run.sh <idea.json>` generates `instruction.md` from the `.template` with the idea injected
 2. Harbor builds a Docker image from `Dockerfile.cpu` (slim) or `Dockerfile.gpu` (CUDA + PyTorch)
-3. The agent (Claude Code) runs inside the container at `/app/`
+3. The agent (Claude Code or Gemini CLI) runs inside the container at `/app/`
 4. On completion, `harbor-task/tests/test.sh` verifies all artifacts were produced
 5. Results are collected in `jobs/<job-id>/` on the host
 
@@ -150,6 +167,8 @@ No hardcoded stages. No tree data structure. No Python orchestration. The agent 
 
 ## Environment
 
+- `ANTHROPIC_API_KEY` — Required for Claude Code agent
+- `GEMINI_API_KEY` or `GOOGLE_API_KEY` — Required for Gemini CLI agent
 - `S2_API_KEY` (optional) — Semantic Scholar API key for higher rate limits
 - `pdflatex` — Required for paper compilation (MacTeX: `/Library/TeX/texbin/pdflatex`)
 
