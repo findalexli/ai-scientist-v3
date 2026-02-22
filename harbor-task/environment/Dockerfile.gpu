@@ -7,7 +7,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # (Python 3.12 + PyTorch + CUDA are already in the base image)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     texlive-latex-base texlive-latex-recommended texlive-fonts-recommended \
-    texlive-latex-extra biber chktex curl jq git git-lfs && \
+    texlive-latex-extra biber chktex curl jq git git-lfs poppler-utils && \
     git lfs install && \
     rm -rf /var/lib/apt/lists/*
 

@@ -55,26 +55,28 @@ mkdir -p literature
 
 Use this priority chain:
 
-### Priority 1: Paper has an arXiv ID → Direct download (free, 100% reliable)
+### Priority 1: Paper has an arXiv ID → ar5iv HTML (best quality, most reliable)
 
 Most ML/AI papers are on arXiv. Check the `externalIds.ArXiv` field from S2 results.
 
+**Use `WebFetch` on the ar5iv HTML version** — this preserves tables, math, and structure far better than PDF-to-text extraction:
+```
+WebFetch(url="https://ar5iv.labs.arxiv.org/html/1706.03762", prompt="Extract the full methodology, experimental setup, and key results")
+```
+
+ar5iv converts arXiv LaTeX sources to HTML. The content is structured, tables are preserved, and `WebFetch` can summarize exactly what you need in a single call. You can make multiple `WebFetch` calls with different prompts to extract different sections.
+
+**Also download the PDF** to `literature/` for figures and as a local backup:
 ```bash
-# Download PDF directly from arXiv
 curl -s -L -o literature/1706.03762.pdf "https://arxiv.org/pdf/1706.03762"
 ```
 
-Then read with the `Read` tool using the `pages` parameter (max 20 pages per call):
+You can read the PDF with the `Read` tool (`pages` parameter, max 20 pages per call) if you need to inspect figures or verify details. **Rate limit:** Wait 3 seconds between consecutive arXiv downloads.
+
+**Fallback — if ar5iv is unavailable for a paper**, read the downloaded PDF directly:
 ```
 Read(file_path="literature/1706.03762.pdf", pages="1-15")
 ```
-
-**Alternative — HTML for quick text extraction** (no figures, but fast):
-```
-WebFetch(url="https://ar5iv.labs.arxiv.org/html/1706.03762", prompt="Extract the full methodology and results sections")
-```
-
-**Rate limit:** Wait 3 seconds between consecutive arXiv downloads.
 
 ### Priority 2: Paper has no arXiv ID → OpenAlex OA links (free)
 
@@ -137,7 +139,7 @@ curl -s -H "x-api-key: $S2_API_KEY" \
 curl -s -L -H "Accept: application/x-bibtex" "https://dx.doi.org/$DOI"
 ```
 
-### Deep dive on a paper (reviews + full text)
+### Deep dive on a paper's review on openreview 
 
 ```bash
 # Search OpenReview for the paper
@@ -148,13 +150,6 @@ curl -s "https://api2.openreview.net/notes?forum=$FORUM_ID&limit=50"
 
 # Read full text — use arXiv if available (see "Reading Full Papers" above)
 ```
-
-### Check novelty
-
-1. S2 keyword search for your exact idea
-2. S2 bulk search sorted by citations to find seminal work
-3. Check citations/references of the closest papers
-4. Search OpenReview for recent ICLR/NeurIPS/ICML submissions
 
 ---
 
@@ -167,7 +162,7 @@ curl -s "https://api2.openreview.net/notes?forum=$FORUM_ID&limit=50"
 - **Multiple searches**: 3-5 queries with different angles for coverage
 - **Read full text**: After identifying key papers, always download and read them — see "Reading Full Papers"
 
-## Gotchas
+## Rate limit
 
 - **S2 abstracts** may contain control chars (ESC/0x1b). Strip with: `re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', text)`
 - **S2 openAccessPdf** is often empty — use arXiv direct download or OpenAlex `best_oa_location` instead

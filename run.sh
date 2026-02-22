@@ -200,7 +200,7 @@ if [[ -n "$RESUME_FROM" ]]; then
 
     # If not found directly, look inside trial subdirectory (job dir case)
     if [[ -z "$PREV_ARTIFACTS" ]]; then
-        TRIAL_DIR=$(find "$RESUME_FROM" -maxdepth 1 -type d -name "harbor-task__*" | head -1)
+        TRIAL_DIR=$(find "$RESUME_FROM" -maxdepth 1 -type d -name "harbor-task*" | head -1)
         if [[ -n "$TRIAL_DIR" ]]; then
             for artifacts_subdir in "agent/artifacts" "verifier/artifacts" "artifacts"; do
                 if [[ -d "$TRIAL_DIR/$artifacts_subdir" ]]; then
