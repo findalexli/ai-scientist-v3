@@ -23,7 +23,7 @@ for dest in /logs/agent/artifacts /logs/verifier/artifacts; do
 done
 
 # Check experiment results (accept .npy, .json, .csv, .pt, or .npz files)
-if [ -d /app/experiment_codebase ] && [ -n "$(ls /app/experiment_codebase/*.npy /app/experiment_codebase/*.json /app/experiment_codebase/*.csv /app/experiment_codebase/*.pt /app/experiment_codebase/*.npz 2>/dev/null)" ]; then
+if [ -d /app/experiment_codebase ] && [ -n "$(find /app/experiment_codebase -maxdepth 3 -type f \( -name '*.npy' -o -name '*.json' -o -name '*.csv' -o -name '*.pt' -o -name '*.npz' \) ! -path '*/cloned_repos/*' ! -path '*/__pycache__/*' 2>/dev/null | head -1)" ]; then
     SCORE=$((SCORE + 1))
     echo "OK: experiment results"
 else

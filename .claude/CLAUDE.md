@@ -25,8 +25,8 @@ API keys (via environment variables, if configured):
 
 ## Research Process
 
-1. **Literature Review** — Use `/search-papers` to find related work. Understand the state of the art. **For the 3-5 most relevant papers, read the full text** — don't rely solely on abstracts. Download PDFs to `literature/` and read them with the `Read` tool (use `pages` parameter for long papers), or use `WebFetch` on HTML versions. Record key takeaways in `literature/README.md`. The `/search-papers` skill documents how to obtain full text for any paper. **When a paper has public code** (GitHub link in the paper, or search GitHub/Papers With Code), **clone it into `experiment_codebase/`** to study the implementation — don't just read the PDF. Literature search is not a one-time step — revisit it throughout the research process. Search again after getting experiment results (to contextualize findings), when the reviewer raises gaps, when you discover unexpected behavior, or when you need to strengthen a claim. Aim for 15-30 citations in the final paper.
-2. **Experiment Design** — Set up experiments by building on existing code whenever possible. If the idea has a `"Code References"` field, clone those repos or download those files first. Check repos cloned during literature review for reusable baselines. Search GitHub for existing implementations of methods in the idea. Clone repos and download files into `experiment_codebase/`. Only write code from scratch when no suitable existing implementation is available. Install packages, download datasets.
+1. **Literature Review** — Use `/search-papers` to find related work. Understand the state of the art. **For the 3-5 most relevant papers, read the full text** — don't rely solely on abstracts. Download PDFs to `literature/` and read them with the `Read` tool (use `pages` parameter for long papers), or use `WebFetch` on HTML versions. Record key takeaways in `literature/README.md`. The `/search-papers` skill documents how to obtain full text for any paper. **When a paper has public code** (GitHub link in the paper, or search GitHub/Papers With Code), **clone it into `experiment_codebase/cloned_repos/`** to study the implementation — don't just read the PDF. Literature search is not a one-time step — revisit it throughout the research process. Search again after getting experiment results (to contextualize findings), when the reviewer raises gaps, when you discover unexpected behavior, or when you need to strengthen a claim. Aim for 15-30 citations in the final paper.
+2. **Experiment Design** — Set up experiments by building on existing code whenever possible. Check repos cloned during literature review for reusable baselines. Search GitHub and Papers With Code for existing implementations. Clone repos and download reference files into `experiment_codebase/cloned_repos/`. Only write code from scratch when no suitable existing implementation is available. Install packages, download datasets.
 3. **Run Experiments** — Use your best judgment on methodology: baselines, ablations, statistical rigor appropriate to the claims. Run multiple random seeds for error bars.
 4. **Plot Results** — Create publication-quality figures in `figures/`. Visually inspect each PNG with the `Read` tool before finalizing.
 5. **Write Paper** — Fill in `latex/template.tex`. Compile with `bash scripts/compile_latex.sh latex/`. Must be 4 pages of main text (excluding references and appendix). After compilation, visually inspect the PDF with the `Read` tool to catch formatting issues.
@@ -64,10 +64,65 @@ API keys (via environment variables, if configured):
 6. Do ablation studies to understand component contributions
 7. Report results truthfully — negative results are valuable
 
+### Experiment Codebase Organization
+
+Organize `experiment_codebase/` into subdirectories by purpose:
+
+```
+experiment_codebase/
+    README.md               # Experiment log (maintain throughout — see below)
+    baselines/              # Baseline experiments: scripts + their results
+    main/                   # Proposed method experiments: scripts + their results
+    ablations/              # Ablation studies: scripts + their results
+    plotting/               # Figure generation scripts (output PNGs go to figures/)
+    cloned_repos/           # Third-party code: git-cloned repos, downloaded reference implementations
+```
+
+Rules:
+- **Keep experiment scripts next to their results.** E.g., `baselines/experiment_baseline.py` writes `baselines/baseline_results.json`.
+- **Each experiment script must be self-contained** — set random seeds, print key metrics during execution so logs capture them.
+- **All third-party code goes in `cloned_repos/`** — git-cloned repos, downloaded reference files, anything you didn't write. E.g., `git clone ... experiment_codebase/cloned_repos/SomeRepo` or `curl -L ... -o experiment_codebase/cloned_repos/utils.py`.
+- **Shared utilities** needed by multiple experiment scripts can live at the `experiment_codebase/` root level. Keep it minimal.
+- **Plotting scripts go in `plotting/`.** These read results from `baselines/`, `main/`, `ablations/` and write PNGs to `figures/`.
+- **Never leave throwaway fix/debug scripts** (e.g., `apply_fix.py`, `fix_parsing.py`) in the codebase. Delete them after use, or don't create them as separate files.
+- **Don't create versioned copies** of scripts (e.g., `create_figures_v2.py`). Edit the existing file instead — version control is handled by `submissions/`.
+- Results files: `.json`, `.csv`, `.npy`, `.pt`, `.npz` — any standard format.
+
+### Experiment README
+
+Maintain `experiment_codebase/README.md` as a running log throughout the research process. Create it when you first set up experiments and update it after each significant run. Format:
+
+```markdown
+# Experiments
+
+## Setup
+- Datasets: [list datasets used, how obtained]
+- Dependencies: [key packages installed]
+- Hardware: [CPU/GPU, memory constraints]
+
+## Experiment Log
+
+### Baselines
+- `baselines/experiment_baseline.py` — [what it tests, key parameters]
+  - Results: `baselines/baseline_results.json`
+  - Outcome: [1-2 sentence summary of findings]
+
+### Main Experiments
+- `main/experiment_main.py` — [what it tests, key parameters]
+  - Results: `main/main_results.json`
+  - Outcome: [1-2 sentence summary of findings]
+
+### Ablations
+- `ablations/experiment_ablation.py` — [what varies, range]
+  - Results: `ablations/ablation_results.json`
+  - Outcome: [key finding from ablation]
+
+## Cloned Repositories
+- `cloned_repos/RepoName/` — [what it provides, which files are used]
+```
+
 ### File Conventions
 - Research ideas: `idea.json` (structured JSON with Name, Title, Hypothesis, etc.). May include optional `"Code References"`: list of `{url, files?, notes}` for repos/files to clone or download.
-- Experiment code: `experiment_codebase/experiment_*.py` (self-contained, set random seeds, print key metrics during execution so logs capture them)
-- Metrics: `experiment_codebase/*_results.npy` (or `.csv`, `.json`, `.pt` — any standard format)
 - Plots: `figures/*.png` (publication quality, max 12, 150+ DPI, `bbox_inches='tight'`, colorblind-friendly palettes, no underscores in labels, error bars when multiple runs exist, visually inspect each PNG with `Read` tool before finalizing)
 - Paper: `latex/template.tex` → compiled to PDF
 - Review: `review.json` (structured NeurIPS format)
@@ -76,7 +131,7 @@ API keys (via environment variables, if configured):
 
 ### Experiment Guidelines
 - Use `uv pip install --system` (preferred over pip — faster)
-- `git clone` existing implementations for baselines rather than writing from scratch. For specific files, use `curl -L https://raw.githubusercontent.com/Owner/Repo/main/path/file.py -o experiment_codebase/file.py`
+- `git clone` existing implementations into `experiment_codebase/cloned_repos/` rather than writing from scratch. For specific files, use `curl -L https://raw.githubusercontent.com/Owner/Repo/main/path/file.py -o experiment_codebase/cloned_repos/file.py`
 - Explore cloned repos before writing code — read their README and key scripts, then build on them
 - Check GPU/RAM availability and design experiments accordingly
 - Prefer faster iterations over one long run

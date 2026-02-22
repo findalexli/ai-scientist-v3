@@ -26,7 +26,8 @@ COPY scripts/ /app/scripts/
 COPY .claude/ /app/.claude/
 
 # Create workspace structure and pre-fill LaTeX template
-RUN mkdir -p /app/experiment_codebase /app/figures /app/latex /app/literature /app/submissions && \
+RUN mkdir -p /app/experiment_codebase/{baselines,main,ablations,plotting,cloned_repos} \
+    /app/figures /app/latex /app/literature /app/submissions && \
     cp -r /app/blank_icbinb_latex/* /app/latex/ && \
     chmod +x /app/scripts/submit_for_review.sh
 

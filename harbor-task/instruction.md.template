@@ -23,9 +23,10 @@ ln -s /data/my_dataset ./my_dataset  # symlink into your working dir
 Always check `/data` before downloading anything large. Store HuggingFace datasets,
 git-cloned repos, and pip wheels there when possible.
 
-If the idea includes `"Code References"`, clone those repos or download those files
-into `experiment_codebase/` early — they're there for a reason. During literature review,
-also clone code repos from the most relevant papers to study and build on.
+During literature review, actively search for existing implementations on GitHub and
+Papers With Code. Clone relevant repos into `experiment_codebase/cloned_repos/` to study
+and build on — don't write code from scratch when a reference implementation exists.
+Start by creating `experiment_codebase/README.md` to document your experiment setup.
 
 ## Artifact Collection
 

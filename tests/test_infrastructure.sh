@@ -90,15 +90,15 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-section "4. Instruction template has Code References note"
+section "4. Instruction template has cloning guidance"
 # ---------------------------------------------------------------------------
 
 TEMPLATE="$REPO_ROOT/harbor-task/instruction.md.template"
 
-if grep -q "Code References" "$TEMPLATE" 2>/dev/null; then
-    pass "Instruction template mentions Code References"
+if grep -q "cloned_repos" "$TEMPLATE" 2>/dev/null; then
+    pass "Instruction template mentions cloned_repos"
 else
-    fail "Instruction template missing Code References note"
+    fail "Instruction template missing cloned_repos guidance"
 fi
 
 # ---------------------------------------------------------------------------
