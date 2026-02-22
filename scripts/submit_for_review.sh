@@ -10,7 +10,7 @@
 #      external reviewer model API
 #   2. Creates a versioned snapshot in submissions/v{N}_{timestamp}/ containing:
 #      - paper.tex, paper.pdf
-#      - experiment_results/
+#      - experiment_codebase/
 #      - figures/
 #      - reviewer_communications/response.json (raw API response)
 #   3. Updates submissions/version_log.json
@@ -92,8 +92,8 @@ elif [ -f "$BASE_DIR/latex/template.pdf" ]; then
 fi
 
 # Copy experiment results
-if [ -d "$BASE_DIR/experiment_results" ]; then
-    cp -r "$BASE_DIR/experiment_results" "$VERSION_DIR/experiment_results"
+if [ -d "$BASE_DIR/experiment_codebase" ]; then
+    cp -r "$BASE_DIR/experiment_codebase" "$VERSION_DIR/experiment_codebase"
 fi
 
 # Copy figures
@@ -101,8 +101,18 @@ if [ -d "$BASE_DIR/figures" ]; then
     cp -r "$BASE_DIR/figures" "$VERSION_DIR/figures"
 fi
 
-# Copy reviewer communications (the raw API response)
-cp "$RAW_RESPONSE" "$VERSION_DIR/reviewer_communications/response.json"
+# Save reviewer communications — strip extracted_text to avoid bloating agent context
+# The agent already has the paper text; it only needs the question back.
+cp "$RAW_RESPONSE" "$VERSION_DIR/reviewer_communications/raw_response.json"
+python3 -c "
+import json, sys
+with open(sys.argv[1]) as f:
+    data = json.load(f)
+# Keep only the question — the extracted_text is redundant for the agent
+output = {'question': data.get('question', '')}
+with open(sys.argv[2], 'w') as f:
+    json.dump(output, f, indent=2)
+" "$RAW_RESPONSE" "$VERSION_DIR/reviewer_communications/response.json"
 
 # --- Step 4: Update version log ---
 python3 -c "
@@ -121,7 +131,7 @@ version_entry = {
     'directory': 'v${NEXT_VERSION}_${TIMESTAMP}',
     'paper_tex': os.path.exists('$VERSION_DIR/paper.tex'),
     'paper_pdf': os.path.exists('$VERSION_DIR/paper.pdf'),
-    'has_experiments': os.path.isdir('$VERSION_DIR/experiment_results'),
+    'has_experiments': os.path.isdir('$VERSION_DIR/experiment_codebase'),
     'has_figures': os.path.isdir('$VERSION_DIR/figures'),
 }
 
@@ -146,7 +156,7 @@ echo "=== Version v${NEXT_VERSION} snapshot complete ==="
 echo "  Directory: $VERSION_DIR"
 echo "  Paper:     $([ -f "$VERSION_DIR/paper.tex" ] && echo 'yes' || echo 'no')"
 echo "  PDF:       $([ -f "$VERSION_DIR/paper.pdf" ] && echo 'yes' || echo 'no')"
-echo "  Experiments: $([ -d "$VERSION_DIR/experiment_results" ] && echo 'yes' || echo 'no')"
+echo "  Experiments: $([ -d "$VERSION_DIR/experiment_codebase" ] && echo 'yes' || echo 'no')"
 echo "  Figures:   $([ -d "$VERSION_DIR/figures" ] && echo 'yes' || echo 'no')"
 echo "  Reviewer:  $VERSION_DIR/reviewer_communications/response.json"
 echo ""

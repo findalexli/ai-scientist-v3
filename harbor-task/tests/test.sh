@@ -11,22 +11,23 @@ uv pip freeze --system > /app/requirements.txt 2>/dev/null || pip freeze > /app/
 # Copy artifacts to both mounted dirs (agent for Docker, verifier as backup for Modal)
 for dest in /logs/agent/artifacts /logs/verifier/artifacts; do
     mkdir -p "$dest"
-    cp -r /app/experiment_results/ "$dest/" 2>/dev/null
+    cp -r /app/experiment_codebase/ "$dest/" 2>/dev/null
     cp -r /app/figures/ "$dest/" 2>/dev/null
     cp /app/latex/template.pdf "$dest/paper.pdf" 2>/dev/null
     cp /app/latex/template.tex "$dest/paper.tex" 2>/dev/null
     cp /app/latex/references.bib "$dest/references.bib" 2>/dev/null
     cp /app/review.json "$dest/" 2>/dev/null
     cp /app/requirements.txt "$dest/requirements.txt" 2>/dev/null
+    cp -r /app/literature/ "$dest/literature/" 2>/dev/null
     cp -r /app/submissions/ "$dest/submissions/" 2>/dev/null
 done
 
 # Check experiment results (accept .npy, .json, .csv, .pt, or .npz files)
-if [ -d /app/experiment_results ] && [ -n "$(ls /app/experiment_results/*.npy /app/experiment_results/*.json /app/experiment_results/*.csv /app/experiment_results/*.pt /app/experiment_results/*.npz 2>/dev/null)" ]; then
+if [ -d /app/experiment_codebase ] && [ -n "$(ls /app/experiment_codebase/*.npy /app/experiment_codebase/*.json /app/experiment_codebase/*.csv /app/experiment_codebase/*.pt /app/experiment_codebase/*.npz 2>/dev/null)" ]; then
     SCORE=$((SCORE + 1))
     echo "OK: experiment results"
 else
-    echo "MISSING: experiment results (data files in experiment_results/)"
+    echo "MISSING: experiment results (data files in experiment_codebase/)"
 fi
 
 # Check plots

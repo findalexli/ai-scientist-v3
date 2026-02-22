@@ -82,8 +82,9 @@ sync_artifacts() {{
     SESSIONS_DIR="${{CLAUDE_CONFIG_DIR:-/logs/agent/sessions}}"
     for DEST in /logs/agent/artifacts /logs/verifier/artifacts; do
         mkdir -p "$DEST" 2>/dev/null || true
-        copy_tree "/app/experiment_results" "experiment_results"
+        copy_tree "/app/experiment_codebase" "experiment_codebase"
         copy_tree "/app/figures" "figures"
+        copy_tree "/app/literature" "literature"
         copy_file "/app/latex/template.pdf" "paper.pdf"
         copy_file "/app/latex/template.tex" "paper.tex"
         copy_file "/app/latex/references.bib" "references.bib"

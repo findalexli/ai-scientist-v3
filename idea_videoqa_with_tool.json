@@ -1,0 +1,129 @@
+{
+  "Name": "videoqa_with_tool",
+  "Title": "Tool-Augmented Multi-Turn Video QA: Coarse-to-Fine Temporal Zoom for Long Video Understanding",
+  "Short Hypothesis": "Equipping a video language model with a temporal zoom-in tool — allowing it to iteratively select and re-examine relevant segments at higher resolution — can match or exceed full-video baselines on long-video QA benchmarks while using significantly fewer input tokens.",
+  "Related Work": [
+    {
+      "title": "Active Video Perception: Iterative Evidence Seeking for Agentic Long Video Understanding",
+      "url": "https://arxiv.org/pdf/2512.05774",
+      "notes": "Proposes Planner-Observer-Reflector loop. First round sweeps the entire video at low FPS/resolution; subsequent rounds tighten the temporal and spatial region based on the Reflector's feedback. The Reflector outputs a confidence score C in [0,1] with justification and controls 4 degrees of freedom: (1) answer vs. another round, (2) what to observe, (3) where (start, end), (4) how (FPS, resolution). Compared to DVD, AVP uses less time and fewer tokens."
+    },
+    {
+      "title": "Thinking With Bounding Boxes: Enhancing Spatial-Temporal Video Grounding via Reinforcement Fine-Tuning",
+      "url": "https://arxiv.org/pdf/2511.21375",
+      "notes": "Fine-grained supervised RL training to improve spatial-temporal grounding. Decomposes the reward into format reward, consistency reward, temporal/spatial reward, thinking reward, and final prediction accuracy."
+    },
+    {
+      "title": "LongVT: Incentivizing Thinking with Long Videos via Native Tool Calling",
+      "url": "https://arxiv.org/pdf/2511.20785",
+      "notes": "Skim-then-examine paradigm using tool calling (crop_video(start_time, end_time)). Trained on 247.9K samples with 15.4K RL fine-tuning examples. Main contribution is the data pipeline for generating tool-calling supervision."
+    },
+    {
+      "title": "Thinking with Drafts: Speculative Temporal Reasoning for Efficient Long Video Understanding",
+      "url": "https://arxiv.org/pdf/2512.00805",
+      "notes": "RL-based long video understanding framework. Focuses on reducing the progressively growing and redundant multi-modal context."
+    },
+    {
+      "title": "Thinking With Videos: Multimodal Tool-Augmented Reinforcement Learning for Long Video Reasoning",
+      "url": "https://arxiv.org/pdf/2508.04416",
+      "notes": "RL-based long video understanding using tools to sample frames on demand. Proposes DGRPO. Very closely related to our setup."
+    },
+    {
+      "title": "Adaptive Keyframe Sampling for Long Video Understanding",
+      "url": "https://openaccess.thecvf.com/content/CVPR2025/papers/Tang_Adaptive_Keyframe_Sampling_for_Long_Video_Understanding_CVPR_2025_paper.pdf",
+      "notes": "Formulates keyframe selection as optimizing (1) relevance between keyframes and the prompt and (2) coverage of keyframes over the video. Uses a cheaper VL model (CLIP or BLIP ITM) for frame scoring."
+    },
+    {
+      "title": "FrameThinker: Learning to Think with Long Videos via Multi-Turn Frame Spotlighting",
+      "url": "https://arxiv.org/pdf/2509.24304v1",
+      "notes": "SFT + RL for long video QA with a zoom-in tool. Multi-turn frame spotlighting."
+    },
+    {
+      "title": "Less Is More, but Where? Dynamic Token Compression via LLM-Guided Keyframe Prior",
+      "url": "https://openreview.net/pdf?id=uhFx1RGD1g",
+      "notes": "Training-free paradigm for video understanding. Claims that VLLM attention layers naturally encode query-conditioned keyframe priors. DyToK dynamically adjusts per-frame token retention ratios, prioritizing semantically rich frames while suppressing redundancies."
+    },
+    {
+      "title": "VideoMem: Enhancing Ultra-Long Video Understanding via Adaptive Memory Management",
+      "url": "https://arxiv.org/pdf/2512.04540",
+      "notes": "RL-based approach using Progressive Grouped Relative Policy Optimization (PRPO)."
+    },
+    {
+      "title": "Zoom-Zero: Reinforced Coarse-to-Fine Video Understanding via Temporal Zoom-in",
+      "url": "https://arxiv.org/abs/2512.14273",
+      "notes": ""
+    },
+    {
+      "title": "Video-MTR: Reinforced Multi-Turn Reasoning for Long Video Understanding",
+      "url": "https://arxiv.org/abs/2508.20478",
+      "notes": ""
+    },
+    {
+      "title": "NarrativeTrack: Evaluating Video Language Models Beyond the Frame",
+      "url": "https://arxiv.org/abs/2601.01095",
+      "notes": "Benchmark for narrative-level video understanding. Dataset availability unclear."
+    },
+    {
+      "title": "VideoZoomer: Reinforcement-Learned Temporal Focusing for Long Video Reasoning",
+      "url": "https://arxiv.org/abs/2512.22315",
+      "notes": ""
+    },
+    {
+      "title": "DeepSeek-OCR 2: Visual Causal Flow",
+      "url": "https://arxiv.org/abs/2601.20552",
+      "notes": ""
+    },
+    {
+      "title": "Flexible Frame Selection for Efficient Video Reasoning",
+      "url": "https://openaccess.thecvf.com/content/CVPR2025/papers/Buch_Flexible_Frame_Selection_for_Efficient_Video_Reasoning_CVPR_2025_paper.pdf",
+      "notes": ""
+    },
+    {
+      "title": "DToMA: Training-free Dynamic Token Manipulation for Long Video Understanding",
+      "url": "https://www.ijcai.org/proceedings/2025/258",
+      "notes": ""
+    }
+  ],
+  "Code References": [
+    {
+      "url": "https://github.com/QwenLM/Qwen3-VL",
+      "files": ["qwen-vl-utils/src/qwen_vl_utils/vision_process.py"],
+      "notes": "Qwen's built-in video token management — clone to understand baseline frame handling"
+    }
+  ],
+  "Initial Work": {
+    "summary": "Preliminary experiments with Qwen-3-4B and 8B on LV-Bench and Video-MME using a multi-turn frame selection approach.",
+    "setup": [
+      "The Qwen model is made frame-aware by inserting the frame index between frames.",
+      "Baseline: send the entire video to Qwen, subject to context length. Qwen has built-in context management (see https://github.com/QwenLM/Qwen3-VL/blob/main/qwen-vl-utils/src/qwen_vl_utils/vision_process.py).",
+      "Multi-turn tool approach: use only 24 tokens per frame in a low-resolution sweep, ask the model to select frames to focus on, extract selected frames programmatically, and return them as subsequent turns.",
+      "The model sees its selected frames at higher detail and can continue selecting or answer the question."
+    ],
+    "results": {
+      "LV-Bench (Qwen-3-4B-Instruct)": {
+        "baseline_full_video": { "avg_tokens": 230922, "accuracy": "55.0%" },
+        "multi_turn_tool": { "avg_tokens": 74542, "accuracy": "51.5%" }
+      }
+    },
+
+    "trace_example": {
+      "prompt": "<|im_start|>user\n<|vision_start|><|video_pad|><|vision_end|>You are a video analysis system. **Follow the instructions and respond step by step**.\nQuestion: What is the genre of this video? Possible answer choices:\nA. It is a news report that introduces the history behind Christmas decorations.\nB. It is a documentary on the evolution of Christmas holiday recipes.\nC. It is a travel vlog exploring Christmas markets around the world.\nD. It is a tutorial on DIY Christmas ornament crafting.\n**Step 1** Briefly answer the following question: In order to locate the correct answer choice, what objects, sceneries, or keyframes should we focusing on?\n**Step 2** Based on your answer in Step 1, list out 3 distinct observation targets, be concise:\n- Target 1: ...\n- Target 2: ...\n...\n**Step 3** From the given video, select at most 8 frames for each observation target.\nOutput your selections as lists of frame seconds. Valid frame selection example:\n- Selection 1: [1, 3, 5]\n- Selection 2: [9]\n- Selection 3: [1, 27]\nRules for Step 2 response:\na. You must include your frame selections in python list.\nb. Each entry in the list must be an integer, representing the absolute time of keyframe in second.\nc. Make sure each list has at most 8 values.\n**Step 4** respond with only a letter (A, B, C, or D). what is the best answer?\n<|im_end|>",
+      "response": "**Step 1**: To determine the genre, we should focus on frames that show news anchors, historical illustrations of Christmas trees, and decorative elements that suggest a narrative about the history of Christmas decorations.\n\n**Step 2**:\n- Target 1: News anchors and studio setting\n- Target 2: Historical illustrations of Christmas trees and people\n- Target 3: Decorative Christmas trees and ornaments\n\n**Step 3**:\n- Selection 1: [0, 2, 4, 6, 8, 10, 12, 14]\n- Selection 2: [29, 31, 33, 35, 37, 39, 41, 43]\n- Selection 3: [55, 57, 59, 61, 63, 65, 67, 69]\n\n**Step 4**: A",
+      "metadata": "H=128 W=224 frames=37 input_tokens=1609 output_tokens=201 preprocessing=0.00s inference=1.43s"
+    },
+    "takeaway": "The multi-turn tool approach reduces token usage by ~68% with only a modest accuracy drop (~3.5pp), suggesting the strategy is viable but needs refinement."
+  },
+  "Experiment Plan": {
+    "model": "gemini-3-flash-preview",
+    "benchmarks": ["LV-Bench", "Video-MME(this is really big, maybe you should start with the long ones)", "Other benchmarks about long-video that i have not found "],
+    "notes": [
+      "Use Gemini's native video capabilities: File API for large videos, clipping via videoMetadata (start_offset, end_offset), and custom FPS sampling.",
+      "Gemini accepts time-interval zoom-in natively (no need for frame-index-based selection as with Qwen). Explore whether the model can iteratively request clips by specifying time intervals.",
+      "Also consider preprocessing with ffmpeg or decord for more flexible slicing if needed.",
+      "Benchmarks are a starting point — not limited to LV-Bench and Video-MME.",
+      "Throughout experimentation, carefully compare against the related work above to assess novelty."
+    ],
+    "gemini_api_reference": "https://ai.google.dev/gemini-api/docs/video-understanding",
+    "data_dir": "/data — persistent host-mounted volume (shared across runs). Download datasets here so they survive container restarts and can be reused by other ideas."
+  }
+}

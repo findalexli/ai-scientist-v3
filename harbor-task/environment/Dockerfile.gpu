@@ -24,12 +24,11 @@ WORKDIR /app
 
 # Copy repo templates (staged into build context by run.sh)
 COPY blank_icbinb_latex/ /app/blank_icbinb_latex/
-COPY fewshot_examples/ /app/fewshot_examples/
 COPY scripts/ /app/scripts/
 COPY .claude/ /app/.claude/
 
 # Create workspace structure and pre-fill LaTeX template
-RUN mkdir -p /app/experiment_results /app/figures /app/latex /app/submissions && \
+RUN mkdir -p /app/experiment_codebase /app/figures /app/latex /app/literature /app/submissions && \
     cp -r /app/blank_icbinb_latex/* /app/latex/ && \
     chmod +x /app/scripts/submit_for_review.sh
 
@@ -37,11 +36,12 @@ RUN mkdir -p /app/experiment_results /app/figures /app/latex /app/submissions &&
 COPY prev_artifacts/ /app/prev_artifacts/
 RUN set +e; \
     if [ "$(ls -A /app/prev_artifacts 2>/dev/null)" ]; then \
-        cp -r /app/prev_artifacts/experiment_results/* /app/experiment_results/ 2>/dev/null; \
+        cp -r /app/prev_artifacts/experiment_codebase/* /app/experiment_codebase/ 2>/dev/null; \
         cp -r /app/prev_artifacts/figures/* /app/figures/ 2>/dev/null; \
         cp /app/prev_artifacts/paper.tex /app/latex/template.tex 2>/dev/null; \
         cp /app/prev_artifacts/paper.pdf /app/latex/template.pdf 2>/dev/null; \
         cp /app/prev_artifacts/review.json /app/review.json 2>/dev/null; \
+        cp -r /app/prev_artifacts/literature/* /app/literature/ 2>/dev/null; \
         cp -r /app/prev_artifacts/submissions/* /app/submissions/ 2>/dev/null; \
         # Restore dependencies from previous run's snapshot
         if [ -f /app/prev_artifacts/requirements.txt ]; then \

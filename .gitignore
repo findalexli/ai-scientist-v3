@@ -2,9 +2,17 @@
 .env
 
 # Local settings
-.claude/settings.local.json
 
+.claude/settings.local.json
+session_analysis/*
 # Run outputs
+*.log
+*.pdf
+*.tex
+*.jpg
+*.png
+*.svg
+*.eps
 jobs/
 logs/
 
@@ -14,12 +22,10 @@ harbor-task/environment/Dockerfile
 
 # Staged build context (copied into environment/ by run.sh, cleaned up on exit)
 harbor-task/environment/blank_icbinb_latex/
-harbor-task/environment/fewshot_examples/
 harbor-task/environment/scripts/
 harbor-task/environment/.claude/
 harbor-task/environment/.env
 harbor-task/environment/prev_artifacts/
-harbor-task/environment/Dockerfile.cpu.bak
 
 # OS
 .DS_Store
@@ -31,9 +37,13 @@ __pycache__/
 *.pyo
 *.egg-info/
 
+# Persistent data (datasets, models — mounted into container at /data)
+data/
+
 # Experiment artifacts (when running locally without Harbor)
-experiment_results/
+experiment_codebase/
 figures/
 latex/
+literature/
 review.json
 *.npy

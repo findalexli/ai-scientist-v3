@@ -65,7 +65,7 @@ def show_files(sb):
     proc = sb.exec(
         "bash",
         "-c",
-        'echo "=== Experiments ===" && ls -lah /app/experiment_results/ 2>/dev/null && echo "" && echo "=== Figures ===" && ls -lah /app/figures/ 2>/dev/null && echo "" && echo "=== Latex ===" && ls -lah /app/latex/*.tex /app/latex/*.pdf 2>/dev/null && echo "" && echo "=== Review ===" && ls -lah /app/review.json 2>/dev/null || echo "not yet"',
+        'echo "=== Experiments ===" && ls -lah /app/experiment_codebase/ 2>/dev/null && echo "" && echo "=== Figures ===" && ls -lah /app/figures/ 2>/dev/null && echo "" && echo "=== Latex ===" && ls -lah /app/latex/*.tex /app/latex/*.pdf 2>/dev/null && echo "" && echo "=== Review ===" && ls -lah /app/review.json 2>/dev/null || echo "not yet"',
     )
     print(proc.stdout.read())
 

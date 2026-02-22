@@ -24,6 +24,7 @@ MODAL_SECRET="harbor-env"
 USE_UPSTREAM_AGENT="0"
 ARTIFACT_SYNC_INTERVAL="180"
 PATCHED_AGENT_IMPORT_PATH="local_harbor_agents.patched_claude_code:PatchedClaudeCode"
+FEEDBACK=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -60,6 +61,10 @@ while [[ $# -gt 0 ]]; do
             ARTIFACT_SYNC_INTERVAL="$2"
             shift 2
             ;;
+        --feedback)
+            FEEDBACK="$2"
+            shift 2
+            ;;
         -h|--help)
             echo "Usage: ./run.sh <idea.json> [OPTIONS]"
             echo ""
@@ -75,6 +80,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --modal-secret NAME        Modal secret name (default: harbor-env)"
             echo "  --use-upstream-agent       Use Harbor's built-in claude-code agent"
             echo "  --artifact-sync-interval S Artifact sync interval in seconds (default: 180)"
+            echo "  --feedback TEXT            Feedback/notes to include in the instruction"
             exit 0
             ;;
         *)
@@ -192,7 +198,6 @@ done
 # --- Stage repo files into the Docker build context ---
 echo "Staging build context..."
 cp -rL "$SCRIPT_DIR/blank_icbinb_latex" "$ENV_DIR/blank_icbinb_latex"
-cp -rL "$SCRIPT_DIR/fewshot_examples"   "$ENV_DIR/fewshot_examples"
 cp -rL "$SCRIPT_DIR/scripts"            "$ENV_DIR/scripts"
 cp -rL "$SCRIPT_DIR/.claude"            "$ENV_DIR/.claude"
 
@@ -214,7 +219,7 @@ else
 fi
 
 cleanup() {
-    rm -rf "$ENV_DIR/blank_icbinb_latex" "$ENV_DIR/fewshot_examples" \
+    rm -rf "$ENV_DIR/blank_icbinb_latex" \
            "$ENV_DIR/scripts" "$ENV_DIR/.claude" "$ENV_DIR/.env" \
            "$ENV_DIR/prev_artifacts"
     # Remove generated files (sources are never modified)
@@ -228,10 +233,12 @@ RESUME_NOTE=""
 if [[ -n "$PREV_ARTIFACTS" ]]; then
     # Build a summary of what already exists
     EXISTING=""
-    [[ -d "$PREV_ARTIFACTS/experiment_results" ]] && \
-        EXISTING="$EXISTING\n- experiment_results/ ($(ls "$PREV_ARTIFACTS/experiment_results/" 2>/dev/null | wc -l | tr -d ' ') files)"
+    [[ -d "$PREV_ARTIFACTS/experiment_codebase" ]] && \
+        EXISTING="$EXISTING\n- experiment_codebase/ ($(ls "$PREV_ARTIFACTS/experiment_codebase/" 2>/dev/null | wc -l | tr -d ' ') files)"
     [[ -d "$PREV_ARTIFACTS/figures" ]] && \
         EXISTING="$EXISTING\n- figures/ ($(ls "$PREV_ARTIFACTS/figures/" 2>/dev/null | wc -l | tr -d ' ') files)"
+    [[ -d "$PREV_ARTIFACTS/literature" ]] && \
+        EXISTING="$EXISTING\n- literature/ ($(ls "$PREV_ARTIFACTS/literature/" 2>/dev/null | wc -l | tr -d ' ') files)"
     [[ -f "$PREV_ARTIFACTS/paper.pdf" ]] && EXISTING="$EXISTING\n- paper.pdf"
     [[ -f "$PREV_ARTIFACTS/paper.tex" ]] && EXISTING="$EXISTING\n- paper.tex"
     [[ -f "$PREV_ARTIFACTS/review.json" ]] && EXISTING="$EXISTING\n- review.json"
@@ -248,6 +255,14 @@ $(echo -e "$EXISTING")
 Review what's already done before continuing. Focus on completing the missing
 pieces rather than redoing work. Check the quality of existing artifacts and
 improve them if needed.
+"
+fi
+
+if [[ -n "$FEEDBACK" ]]; then
+    RESUME_NOTE="$RESUME_NOTE
+## Feedback from Previous Run
+
+$FEEDBACK
 "
 fi
 
@@ -313,6 +328,9 @@ if [[ "$GPUS" != "0" ]]; then
 fi
 if [[ -n "$PREV_ARTIFACTS" ]]; then
     echo "  Resume:  $PREV_ARTIFACTS"
+fi
+if [[ -n "$FEEDBACK" ]]; then
+    echo "  Feedback: (included)"
 fi
 echo ""
 
