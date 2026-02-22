@@ -110,13 +110,126 @@ Response: `{ "data": [{ "citedPaper": { ... } }, ...] }`
 
 ---
 
-## 2. OpenReview
+## 2. OpenAlex
+
+Base URL: `https://api.openalex.org`
+
+Auth: `api_key=$OPENALEX_API_KEY` query parameter. Free tier: $1/day budget. Singleton lookups (single work by ID) are free. List queries cost $0.0001. Search queries cost $0.001.
+
+### 2a. Search Works
+
+```bash
+# Full-text search (title + abstract + fulltext)
+curl -s "https://api.openalex.org/works?search=neural+architecture+search&filter=publication_year:>2020&sort=cited_by_count:desc&per-page=10&select=id,title,publication_year,cited_by_count,doi,open_access,best_oa_location,authorships&api_key=$OPENALEX_API_KEY"
+```
+
+**Parameters:**
+- `search` — full-text search across title/abstract/fulltext
+- `filter` — filter results (see filter syntax below)
+- `sort` — e.g., `cited_by_count:desc`, `publication_year:desc`
+- `per-page` — results per page (default 25, max 200)
+- `select` — limit returned fields (faster responses)
+- `api_key` — your API key
+
+**Common filters:**
+- `publication_year:2023` or `publication_year:>2020` or `publication_year:2020-2024`
+- `cited_by_count:>100`
+- `is_oa:true` — open access only
+- `has_doi:true`
+- Multiple filters with comma (AND): `publication_year:>2020,is_oa:true`
+
+### 2b. Lookup by DOI
+
+Free (singleton request, no budget cost).
+
+```bash
+curl -s "https://api.openalex.org/works/https://doi.org/10.48550/arXiv.1706.03762?select=id,title,doi,open_access,best_oa_location,authorships&api_key=$OPENALEX_API_KEY"
+```
+
+### 2c. Get OA PDF Link
+
+The `best_oa_location` field contains the best open access PDF URL:
+
+```json
+{
+  "best_oa_location": {
+    "pdf_url": "https://arxiv.org/pdf/1706.03762",
+    "landing_page_url": "https://arxiv.org/abs/1706.03762",
+    "source": { "display_name": "arXiv" }
+  }
+}
+```
+
+Download the PDF:
+```bash
+curl -s -L -o literature/paper_name.pdf "$PDF_URL"
+```
+
+### 2d. Batch Lookup by DOIs
+
+Up to 50 DOIs per request using pipe separator:
+
+```bash
+curl -s "https://api.openalex.org/works?filter=doi:https://doi.org/10.1234/a|https://doi.org/10.1234/b|https://doi.org/10.1234/c&per-page=50&select=id,title,doi,best_oa_location&api_key=$OPENALEX_API_KEY"
+```
+
+### OpenAlex Rate Limits
+
+- Max 100 requests per second
+- Daily budget: $1/day (free tier)
+  - Singleton (single work by ID): free
+  - List request: $0.0001
+  - Search request: $0.001
+- Budget resets every 24 hours
+- Get API key at openalex.org/settings/api
+
+---
+
+## 3. arXiv Direct Download
+
+No API key needed. Works for any paper on arXiv.
+
+### 3a. Download PDF
+
+```bash
+mkdir -p literature
+curl -s -L -o literature/1706.03762.pdf "https://arxiv.org/pdf/1706.03762"
+```
+
+Then read with Claude's `Read` tool:
+```
+Read(file_path="literature/1706.03762.pdf", pages="1-15")
+```
+
+For papers longer than 20 pages, make multiple `Read` calls with different page ranges.
+
+### 3b. Read HTML Version (alternative — text only, no figures)
+
+ar5iv has the broadest coverage (including older papers):
+```
+WebFetch(url="https://ar5iv.labs.arxiv.org/html/1706.03762", prompt="Extract the methodology and results")
+```
+
+arXiv native HTML (recent papers only):
+```
+WebFetch(url="https://arxiv.org/html/1706.03762v7", prompt="Extract the methodology and results")
+```
+
+### arXiv Rate Limits
+
+- Wait at least 3 seconds between consecutive downloads
+- No API key needed
+- Bulk automated downloads are prohibited — only download papers you actually need to read
+
+---
+
+## 4. OpenReview
 
 Base URL: `https://api2.openreview.net`
 
 No auth needed for public data. Covers ICLR (2013+), NeurIPS (2019+), ICML (2023+), TMLR, workshops.
 
-### 2a. Keyword Search
+### 4a. Keyword Search
 
 Elasticsearch-powered fulltext search.
 
@@ -131,7 +244,7 @@ curl -s "https://api2.openreview.net/notes/search?term=in-context+learning&sourc
 
 Response: `{ "notes": [...], "count": N }`
 
-### 2b. Venue-Specific Query
+### 4b. Venue-Specific Query
 
 ```bash
 curl -s "https://api2.openreview.net/notes?content.venueid=ICLR.cc/2024/Conference&limit=50&select=id,forum,content.title,content.authors,content.abstract,content.venue,content.keywords"
@@ -139,7 +252,7 @@ curl -s "https://api2.openreview.net/notes?content.venueid=ICLR.cc/2024/Conferen
 
 Venue IDs: `ICLR.cc/2024/Conference`, `NeurIPS.cc/2024/Conference`, `ICML.cc/2024/Conference` (no trailing slash).
 
-### 2c. Get Reviews
+### 4c. Get Reviews
 
 ```bash
 curl -s "https://api2.openreview.net/notes?forum=$FORUM_ID&limit=50" | python3 -c "
@@ -158,13 +271,13 @@ for n in d.get('notes', []):
 "
 ```
 
-### 2d. Download PDF
+### 4d. Download PDF
 
 ```bash
 curl -s "https://api2.openreview.net/pdf?id=<NOTE_ID>" -o paper.pdf
 ```
 
-### 2e. Extract Content Fields
+### 4e. Extract Content Fields
 
 V2 wraps values: `content.title.value`, not `content.title`.
 
@@ -187,9 +300,9 @@ print(f'URL: https://openreview.net/forum?id={n[\"forum\"]}')
 
 ---
 
-## 3. CrossRef
+## 5. CrossRef
 
-### 3a. BibTeX via dx.doi.org
+### 5a. BibTeX via dx.doi.org
 
 Works for ALL DOI types (arXiv, ACL, ACM, Springer, etc.).
 
@@ -200,7 +313,7 @@ curl -s -L -H "Accept: application/x-bibtex" "https://dx.doi.org/10.18653/v1/N19
 
 **Important:** Use `dx.doi.org`, NOT `api.crossref.org/works/{doi}/transform`.
 
-### 3b. Keyword Search (find DOI by title)
+### 5b. Keyword Search (find DOI by title)
 
 ```bash
 curl -s "https://api.crossref.org/works?query=attention+is+all+you+need&rows=3&mailto=test@example.com&select=DOI,title,author,is-referenced-by-count"

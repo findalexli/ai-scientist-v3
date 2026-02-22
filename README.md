@@ -74,7 +74,6 @@ ai_scientist_v3/
 │   ├── compile_latex.sh                   # pdflatex + bibtex + chktex
 │   └── submit_for_review.sh              # External review API + versioned snapshot
 ├── blank_icbinb_latex/                     # ICLR 2025 workshop LaTeX template
-├── fewshot_examples/                       # Example reviews for calibration
 └── docs/                                   # Claude Code documentation reference
 ```
 
@@ -97,6 +96,16 @@ Source templates are never modified — `run.sh` generates `instruction.md` and 
 ```
 
 This bakes the previous run's artifacts into the new container and injects a "Resumed Session" section so the agent continues rather than starts over.
+
+### Sending Feedback
+
+After reviewing a run's output, you can send feedback to steer the next run:
+
+```bash
+./run.sh idea.json --resume-from jobs/2026-02-14__12-10-51/ --feedback "The ablation study is missing a comparison without the temporal zoom component. Also add error bars to Figure 3."
+```
+
+The `--feedback` text is injected into the instruction as a "Feedback from Previous Run" section. The agent sees it at the start of the session and prioritizes addressing it. Combine with `--resume-from` so the agent builds on existing artifacts rather than starting over.
 
 ### GPU Support
 
