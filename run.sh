@@ -119,9 +119,6 @@ if ! [[ "$ARTIFACT_SYNC_INTERVAL" =~ ^[0-9]+$ ]] || [[ "$ARTIFACT_SYNC_INTERVAL"
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ENV_DIR="$SCRIPT_DIR/harbor-task/environment"
-INSTRUCTION_TEMPLATE="$SCRIPT_DIR/harbor-task/instruction.md.template"
-INSTRUCTION_OUT="$SCRIPT_DIR/harbor-task/instruction.md"
 
 # --- Load .env into the current shell so harbor/agent can read them (optional) ---
 for env_file in "$SCRIPT_DIR/.env" "$SCRIPT_DIR/../.env"; do
@@ -136,6 +133,15 @@ for env_file in "$SCRIPT_DIR/.env" "$SCRIPT_DIR/../.env"; do
         fi
     fi
 done
+
+# Persistent data directory (datasets, models, etc.) — mounted into container at /data
+# Must come AFTER .env sourcing so DATA_DIR from .env takes priority
+DATA_DIR="${DATA_DIR:-$SCRIPT_DIR/data}"
+export DATA_DIR
+mkdir -p "$DATA_DIR"
+ENV_DIR="$SCRIPT_DIR/harbor-task/environment"
+INSTRUCTION_TEMPLATE="$SCRIPT_DIR/harbor-task/instruction.md.template"
+INSTRUCTION_OUT="$SCRIPT_DIR/harbor-task/instruction.md"
 
 # --- Resolve previous artifacts if resuming ---
 PREV_ARTIFACTS=""

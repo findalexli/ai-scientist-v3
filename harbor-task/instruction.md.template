@@ -7,6 +7,22 @@ publication-ready research paper.
 
 {{IDEA_CONTENT}}
 {{RESUME_CONTEXT}}
+## Persistent Data Directory
+
+`/data` is a persistent directory mounted from the host. Use it to cache downloaded
+datasets, models, and other large files so they survive across runs:
+
+```bash
+# Example: download a dataset only if not already cached
+if [ ! -d /data/my_dataset ]; then
+    huggingface-cli download my-org/my-dataset --local-dir /data/my_dataset
+fi
+ln -s /data/my_dataset ./my_dataset  # symlink into your working dir
+```
+
+Always check `/data` before downloading anything large. Store HuggingFace datasets,
+git-cloned repos, and pip wheels there when possible.
+
 ## Artifact Collection
 
 Save artifacts incrementally throughout the run — don't wait until the end. After each major milestone (experiments done, plots done, paper compiled, review received), copy what you have so far:

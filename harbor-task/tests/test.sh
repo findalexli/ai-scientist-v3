@@ -21,12 +21,12 @@ for dest in /logs/agent/artifacts /logs/verifier/artifacts; do
     cp -r /app/submissions/ "$dest/submissions/" 2>/dev/null
 done
 
-# Check experiment results
-if [ -d /app/experiment_results ] && [ -n "$(ls /app/experiment_results/*.npy 2>/dev/null)" ]; then
+# Check experiment results (accept .npy, .json, .csv, .pt, or .npz files)
+if [ -d /app/experiment_results ] && [ -n "$(ls /app/experiment_results/*.npy /app/experiment_results/*.json /app/experiment_results/*.csv /app/experiment_results/*.pt /app/experiment_results/*.npz 2>/dev/null)" ]; then
     SCORE=$((SCORE + 1))
     echo "OK: experiment results"
 else
-    echo "MISSING: experiment results (.npy files)"
+    echo "MISSING: experiment results (data files in experiment_results/)"
 fi
 
 # Check plots
@@ -45,8 +45,8 @@ else
     echo "MISSING: compiled paper (latex/template.pdf)"
 fi
 
-# Check review
-if [ -f /app/review.json ]; then
+# Check review (accept review.json at root or reviewer response in submissions)
+if [ -f /app/review.json ] || [ -n "$(find /app/submissions -name 'response.json' -path '*/reviewer_communications/*' 2>/dev/null | head -1)" ]; then
     SCORE=$((SCORE + 1))
     echo "OK: review"
 else

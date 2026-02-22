@@ -110,6 +110,12 @@ SYNC_PID=$!
 {base_command}
 AGENT_EXIT=$?
 
+# Fix permissions on session files so the host process can read them for
+# trajectory conversion.  Claude Code runs as root inside the container and
+# creates files with 0600 — the host user needs at least read access.
+SESSIONS_DIR="${{CLAUDE_CONFIG_DIR:-/logs/agent/sessions}}"
+chmod -R a+rX "$SESSIONS_DIR" 2>/dev/null || true
+
 kill "$SYNC_PID" 2>/dev/null || true
 wait "$SYNC_PID" 2>/dev/null || true
 
