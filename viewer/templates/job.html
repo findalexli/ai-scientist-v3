@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Job Detail — AI Scientist v3</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #090c10;
+  --surface: #10141a;
+  --surface2: #1c2128;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text-dim: #8b949e;
+  --accent: #58a6ff;
+  --green: #3fb950;
+  --yellow: #d29922;
+  --red: #f85149;
+  --purple: #bc8cff;
+  --pink: #f778ba;
+  --orange: #d18616;
+  --cyan: #39d2c0;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+/* Header */
+.header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  position: relative;
+  z-index: 20;
+}
+.header a { color: var(--accent); text-decoration: none; font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 4px; transition: color 0.2s; }
+.header a:hover { color: #fff; text-decoration: none; }
+.header h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.2px; }
+.header-stats {
+  display: flex;
+  gap: 24px;
+  margin-left: auto;
+  align-items: center;
+}
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: 12px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.stat .val {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  font-family: 'SF Mono', SFMono-Regular, Consolas, monospace;
+  line-height: 1.2;
+}
+.stat .val.cost { color: var(--yellow); }
+.status-badge {
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.status-badge.running { background: rgba(63,185,80,0.2); color: var(--green); }
+.status-badge.completed { background: rgba(139,148,158,0.2); color: var(--text-dim); }
+.status-badge.idle { background: rgba(210,153,34,0.2); color: var(--yellow); }
+.model-badge {
+  background: rgba(188,140,255,0.15);
+  color: var(--purple);
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+/* Main layout */
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 400px;
+  gap: 0;
+  height: calc(100vh - 60px);
+}
+
+/* Timeline panel */
+.timeline-panel {
+  overflow-y: auto;
+  padding: 12px 16px;
+  border-right: 1px solid var(--border);
+}
+.timeline-filters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  padding: 6px 0;
+  z-index: 10;
+}
+.tf-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 3px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  transition: all 0.15s;
+}
+.tf-btn:hover { border-color: var(--accent); }
+.tf-btn.active { opacity: 1; color: #fff; }
+.tf-btn.off { opacity: 0.4; }
+
+/* Event colors */
+.ev-literature_review { border-left-color: var(--purple) !important; }
+.ev-submission { border-left-color: var(--pink) !important; }
+.ev-experiment { border-left-color: var(--green) !important; }
+.ev-paper_write { border-left-color: var(--accent) !important; }
+.ev-plotting { border-left-color: var(--cyan) !important; }
+.ev-git_clone { border-left-color: var(--orange) !important; }
+.ev-pip_install { border-left-color: var(--orange) !important; }
+.ev-file_read { border-left-color: #484f58 !important; }
+.ev-file_write { border-left-color: #484f58 !important; }
+.ev-bash { border-left-color: var(--text-dim) !important; }
+.ev-web { border-left-color: var(--yellow) !important; }
+.ev-subagent { border-left-color: var(--pink) !important; }
+.ev-thinking { border-left-color: #484f58 !important; }
+.ev-text { border-left-color: var(--text-dim) !important; }
+.ev-tool_result { border-left-color: #21262d !important; }
+.ev-system { border-left-color: var(--accent) !important; }
+.ev-task_mgmt { border-left-color: var(--text-dim) !important; }
+.ev-other { border-left-color: var(--border) !important; }
+.ev-user_message { border-left-color: var(--yellow) !important; }
+
+.event {
+  border-left: 3px solid var(--border);
+  padding: 6px 12px;
+  margin-bottom: 4px;
+  border-radius: 0 4px 4px 0;
+  background: var(--surface);
+  cursor: pointer;
+  transition: background 0.1s, box-shadow 0.1s;
+}
+.event:hover { background: var(--surface2); }
+.event.highlight-tool {
+  background: var(--surface2);
+  box-shadow: 0 0 0 1px var(--text-dim) inset;
+}
+.event-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.event-step {
+  font-size: 10px;
+  color: var(--text-dim);
+  font-family: 'SF Mono', SFMono-Regular, Consolas, monospace;
+  min-width: 30px;
+}
+.event-type-tag {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.event-summary {
+  font-size: 13px;
+  color: var(--text);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.event-tokens {
+  font-size: 10px;
+  color: var(--text-dim);
+  font-family: 'SF Mono', SFMono-Regular, Consolas, monospace;
+}
+.event-detail {
+  display: none;
+  margin-top: 8px;
+  padding: 8px;
+  background: var(--bg);
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: 'SF Mono', SFMono-Regular, Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text-dim);
+  max-height: 300px;
+  overflow-y: auto;
+}
+.event.expanded .event-detail { display: block; }
+
+/* Right panels */
+.right-panels {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.panel {
+  border-bottom: 1px solid var(--border);
+  padding: 14px 16px;
+}
+.panel-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+/* Token chart */
+.chart-container {
+  position: relative;
+  height: 200px;
+}
+
+/* Submissions */
+.submission-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+.sub-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.sub-version {
+  background: rgba(63,185,80,0.2);
+  color: var(--green);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.sub-time { font-size: 11px; color: var(--text-dim); }
+.sub-review {
+  font-size: 12px;
+  color: var(--text-dim);
+  max-height: 60px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: max-height 0.3s;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+.sub-review.expanded { max-height: none; overflow: auto; }
+.sub-rebuttal {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--cyan);
+  max-height: 60px;
+  overflow: hidden;
+  cursor: pointer;
+  white-space: pre-wrap;
+}
+.sub-rebuttal.expanded { max-height: none; overflow: auto; }
+.sub-rebuttal::before { content: "Rebuttal: "; font-weight: 600; }
+.sub-mode {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(136,98,226,0.2);
+  color: var(--purple, #b392f0);
+}
+.sub-badges { display: flex; gap: 4px; margin-top: 4px; }
+.sub-badge {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(139,148,158,0.15);
+  color: var(--text-dim);
+}
+
+/* Tool breakdown */
+.tool-table {
+  width: 100%;
+  font-size: 12px;
+}
+.tool-table td { padding: 3px 8px; }
+.tool-table td:first-child { color: var(--text); }
+.tool-table td:nth-child(2) { text-align: right; color: var(--text-dim); font-family: monospace; }
+.tool-table td:nth-child(3) { text-align: right; color: var(--text-dim); font-family: monospace; width: 50px; }
+.tool-bar {
+  height: 4px;
+  background: var(--accent);
+  border-radius: 2px;
+  margin-top: 2px;
+}
+
+/* Donut chart */
+.donut-container {
+  position: relative;
+  height: 160px;
+  margin-bottom: 10px;
+}
+
+.no-data { color: var(--text-dim); font-size: 13px; text-align: center; padding: 20px; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <a href="/">&larr; All Jobs</a>
+  <h1 id="job-title">{{JOB_ID}}</h1>
+  <span class="status-badge" id="status-badge">...</span>
+  <span class="model-badge" id="model-badge">...</span>
+  <div class="header-stats">
+    <div class="stat"><span class="val" id="stat-events">-</span>events</div>
+    <div class="stat"><span class="val" id="stat-tokens">-</span>tokens</div>
+    <div class="stat"><span class="val cost" id="stat-cost">-</span>est. cost</div>
+    <div class="stat"><span class="val" id="stat-subs">-</span>submissions</div>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- Timeline -->
+  <div class="timeline-panel" id="timeline-panel">
+    <div class="timeline-filters" id="timeline-filters"></div>
+    <div id="timeline"></div>
+  </div>
+
+  <!-- Right panels -->
+  <div class="right-panels">
+    <!-- Token chart -->
+    <div class="panel">
+      <div class="panel-title">Cumulative Token Usage</div>
+      <div class="chart-container">
+        <canvas id="token-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- Submissions -->
+    <div class="panel">
+      <div class="panel-title">Submissions &amp; Reviews</div>
+      <div id="submissions-list"><div class="no-data">Loading...</div></div>
+    </div>
+
+    <!-- Tool breakdown -->
+    <div class="panel">
+      <div class="panel-title">Tool Breakdown</div>
+      <div class="donut-container">
+        <canvas id="tool-chart"></canvas>
+      </div>
+      <table class="tool-table" id="tool-table"></table>
+    </div>
+
+    <!-- Event type breakdown -->
+    <div class="panel">
+      <div class="panel-title">Activity Breakdown</div>
+      <div class="donut-container">
+        <canvas id="activity-chart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const JOB_ID = '{{JOB_ID}}';
+let allEvents = [];
+let lastStep = 0;
+let activeFilters = new Set();
+let tokenChart = null;
+let toolChart = null;
+let activityChart = null;
+let isLive = false;
+let evtSource = null;
+
+// Event type config
+const EVENT_TYPES = {
+  literature_review: { label: 'Literature', color: '#bc8cff' },
+  submission: { label: 'Submission', color: '#f778ba' },
+  experiment: { label: 'Experiment', color: '#3fb950' },
+  paper_write: { label: 'Paper', color: '#58a6ff' },
+  plotting: { label: 'Plotting', color: '#39d2c0' },
+  git_clone: { label: 'Git', color: '#d18616' },
+  pip_install: { label: 'Install', color: '#d18616' },
+  bash: { label: 'Bash', color: '#8b949e' },
+  web: { label: 'Web', color: '#d29922' },
+  file_read: { label: 'Read', color: '#484f58' },
+  file_write: { label: 'Write', color: '#484f58' },
+  subagent: { label: 'Subagent', color: '#f778ba' },
+  thinking: { label: 'Thinking', color: '#484f58' },
+  text: { label: 'Text', color: '#8b949e' },
+  tool_result: { label: 'Result', color: '#21262d' },
+  task_mgmt: { label: 'TaskMgmt', color: '#8b949e' },
+  system: { label: 'System', color: '#58a6ff' },
+  user_message: { label: 'User', color: '#d29922' },
+  other: { label: 'Other', color: '#30363d' },
+};
+
+function formatTokens(n) {
+  if (!n) return '-';
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(0) + 'K';
+  return String(n);
+}
+
+// ── Timeline ──
+
+function renderFilterButtons() {
+  const counts = {};
+  allEvents.forEach(e => {
+    if (e.source === 'agent' || e.source === 'system') {
+      counts[e.event_type] = (counts[e.event_type] || 0) + 1;
+    }
+  });
+
+  const container = document.getElementById('timeline-filters');
+  container.innerHTML = '';
+
+  // "All" button
+  const allBtn = document.createElement('button');
+  allBtn.className = 'tf-btn' + (activeFilters.size === 0 ? ' active' : '');
+  allBtn.textContent = 'All';
+  allBtn.style.background = activeFilters.size === 0 ? 'var(--accent)' : '';
+  allBtn.style.color = activeFilters.size === 0 ? '#fff' : '';
+  allBtn.onclick = () => { activeFilters.clear(); renderFilterButtons(); renderTimeline(); };
+  container.appendChild(allBtn);
+
+  Object.entries(EVENT_TYPES).forEach(([type, cfg]) => {
+    if (!counts[type]) return;
+    const btn = document.createElement('button');
+    const isActive = activeFilters.has(type);
+    btn.className = 'tf-btn' + (isActive ? ' active' : '');
+    if (isActive) {
+      btn.style.background = cfg.color;
+      btn.style.borderColor = cfg.color;
+      btn.style.color = '#fff';
+    }
+    btn.textContent = `${cfg.label} (${counts[type]})`;
+    btn.onclick = () => {
+      if (activeFilters.has(type)) activeFilters.delete(type);
+      else activeFilters.add(type);
+      renderFilterButtons();
+      renderTimeline();
+    };
+    container.appendChild(btn);
+  });
+}
+
+function createEventEl(ev) {
+  const cfg = EVENT_TYPES[ev.event_type] || EVENT_TYPES.other;
+  const div = document.createElement('div');
+  div.className = `event ev-${ev.event_type}`;
+  div.dataset.step = ev.step;
+  if (ev.tool_id) div.dataset.toolId = ev.tool_id;
+
+  let tokensHtml = '';
+  if (ev.tokens) {
+    const total = (ev.tokens.input_tokens || 0) + (ev.tokens.output_tokens || 0);
+    if (total > 0) tokensHtml = `<span class="event-tokens">${formatTokens(total)}</span>`;
+  }
+
+  div.innerHTML = `
+    <div class="event-header">
+      <span class="event-step">#${ev.step}</span>
+      <span class="event-type-tag" style="background:${cfg.color}22;color:${cfg.color}">${cfg.label}</span>
+      <span class="event-summary" title="${escHtml(ev.summary)}">${escHtml(ev.summary)}</span>
+      ${tokensHtml}
+    </div>
+    ${ev.detail ? `<div class="event-detail">${escHtml(ev.detail)}</div>` : ''}
+  `;
+
+  if (ev.detail) {
+    div.onclick = () => div.classList.toggle('expanded');
+  }
+
+  if (ev.tool_id) {
+    div.addEventListener('mouseenter', () => {
+      document.querySelectorAll(`.event[data-tool-id="${ev.tool_id}"]`).forEach(el => el.classList.add('highlight-tool'));
+    });
+    div.addEventListener('mouseleave', () => {
+      document.querySelectorAll(`.event[data-tool-id="${ev.tool_id}"]`).forEach(el => el.classList.remove('highlight-tool'));
+    });
+  }
+
+  return div;
+}
+
+function escHtml(s) {
+  if (!s) return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderTimeline() {
+  const container = document.getElementById('timeline');
+  container.innerHTML = '';
+
+  let filtered = allEvents;
+  if (activeFilters.size > 0) {
+    filtered = allEvents.filter(e => activeFilters.has(e.event_type));
+  }
+
+  // For performance, only render last 500 events
+  const toRender = filtered.slice(-500);
+  const frag = document.createDocumentFragment();
+  toRender.forEach(ev => frag.appendChild(createEventEl(ev)));
+  container.appendChild(frag);
+}
+
+function appendEvent(ev) {
+  allEvents.push(ev);
+  if (activeFilters.size > 0 && !activeFilters.has(ev.event_type)) return;
+
+  const container = document.getElementById('timeline');
+  const panel = document.getElementById('timeline-panel');
+  const wasAtBottom = panel.scrollHeight - panel.scrollTop - panel.clientHeight < 100;
+
+  container.appendChild(createEventEl(ev));
+
+  // Auto-scroll if user was near bottom
+  if (wasAtBottom) {
+    panel.scrollTop = panel.scrollHeight;
+  }
+
+  // Trim if too many DOM nodes
+  while (container.children.length > 600) {
+    container.removeChild(container.firstChild);
+  }
+}
+
+// ── Charts ──
+
+function initTokenChart() {
+  const ctx = document.getElementById('token-chart').getContext('2d');
+  tokenChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        { label: 'Output', data: [], borderColor: '#3fb950', backgroundColor: 'rgba(63,185,80,0.1)', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 },
+        { label: 'Input', data: [], borderColor: '#58a6ff', backgroundColor: 'rgba(88,166,255,0.1)', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 },
+        { label: 'Cache Read', data: [], borderColor: '#bc8cff', backgroundColor: 'rgba(188,140,255,0.1)', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 },
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { intersect: false, mode: 'index' },
+      plugins: {
+        legend: { position: 'top', labels: { boxWidth: 12, font: { size: 10 }, color: '#8b949e' } },
+        tooltip: {
+          callbacks: {
+            label: ctx => `${ctx.dataset.label}: ${formatTokens(ctx.raw)}`
+          }
+        }
+      },
+      scales: {
+        x: { display: true, grid: { color: '#21262d' }, ticks: { color: '#484f58', font: { size: 9 }, maxTicksLimit: 8 } },
+        y: { display: true, grid: { color: '#21262d' }, ticks: { color: '#484f58', font: { size: 9 }, callback: v => formatTokens(v) } }
+      }
+    }
+  });
+}
+
+function updateTokenChart(cumulative) {
+  if (!tokenChart || !cumulative.length) return;
+  tokenChart.data.labels = cumulative.map(c => c.step);
+  tokenChart.data.datasets[0].data = cumulative.map(c => c.output_tokens);
+  tokenChart.data.datasets[1].data = cumulative.map(c => c.input_tokens);
+  tokenChart.data.datasets[2].data = cumulative.map(c => c.cache_read);
+  tokenChart.update('none');
+}
+
+function initToolChart() {
+  const ctx = document.getElementById('tool-chart').getContext('2d');
+  toolChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels: [], datasets: [{ data: [], backgroundColor: [] }] },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '60%',
+      plugins: {
+        legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 }, color: '#8b949e', padding: 6 } }
+      }
+    }
+  });
+}
+
+function updateToolChart(breakdown) {
+  if (!toolChart || !breakdown.length) return;
+  const colors = ['#58a6ff','#3fb950','#bc8cff','#f778ba','#d29922','#39d2c0','#d18616','#8b949e','#484f58','#f85149'];
+  toolChart.data.labels = breakdown.map(b => b.tool);
+  toolChart.data.datasets[0].data = breakdown.map(b => b.count);
+  toolChart.data.datasets[0].backgroundColor = breakdown.map((_, i) => colors[i % colors.length]);
+  toolChart.update('none');
+
+  // Table
+  const table = document.getElementById('tool-table');
+  table.innerHTML = breakdown.map(b => `
+    <tr>
+      <td>${b.tool}</td>
+      <td>${b.count}</td>
+      <td>${b.pct}%</td>
+    </tr>
+  `).join('');
+}
+
+function initActivityChart() {
+  const ctx = document.getElementById('activity-chart').getContext('2d');
+  activityChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels: [], datasets: [{ data: [], backgroundColor: [] }] },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '60%',
+      plugins: {
+        legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 }, color: '#8b949e', padding: 6 } }
+      }
+    }
+  });
+}
+
+function updateActivityChart(breakdown) {
+  if (!activityChart || !breakdown.length) return;
+  activityChart.data.labels = breakdown.map(b => (EVENT_TYPES[b.type] || {}).label || b.type);
+  activityChart.data.datasets[0].data = breakdown.map(b => b.count);
+  activityChart.data.datasets[0].backgroundColor = breakdown.map(b => (EVENT_TYPES[b.type] || {}).color || '#30363d');
+  activityChart.update('none');
+}
+
+// ── Submissions ──
+
+async function loadSubmissions() {
+  try {
+    const resp = await fetch(`/api/jobs/${JOB_ID}/submissions`);
+    const data = await resp.json();
+    const container = document.getElementById('submissions-list');
+
+    if (!data.submissions || !data.submissions.length) {
+      container.innerHTML = '<div class="no-data">No submissions yet</div>';
+      document.getElementById('stat-subs').textContent = '0';
+      return;
+    }
+
+    document.getElementById('stat-subs').textContent = data.total;
+
+    container.innerHTML = data.submissions.map(s => `
+      <div class="submission-card">
+        <div class="sub-header">
+          <span class="sub-version">v${s.version}</span>
+          <span class="sub-time">${s.timestamp || ''}</span>
+          ${s.reviewer_mode === 'subagent' ? '<span class="sub-mode">subagent</span>' : ''}
+        </div>
+        <div class="sub-review" onclick="this.classList.toggle('expanded')">${escHtml(s.review || 'No review')}</div>
+        ${s.rebuttal ? `<div class="sub-rebuttal" onclick="this.classList.toggle('expanded')">${escHtml(s.rebuttal)}</div>` : ''}
+        <div class="sub-badges">
+          ${s.has_pdf ? '<span class="sub-badge">PDF</span>' : ''}
+          ${s.has_tex ? '<span class="sub-badge">TEX</span>' : ''}
+          ${s.has_figures ? `<span class="sub-badge">${s.figures_count} figs</span>` : ''}
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    console.error('Failed to load submissions:', e);
+  }
+}
+
+// ── Data loading ──
+
+async function loadInitialData() {
+  try {
+    // Load all events
+    const evResp = await fetch(`/api/jobs/${JOB_ID}/events`);
+    const evData = await evResp.json();
+    allEvents = evData.events || [];
+    lastStep = evData.total_lines || 0;
+
+    // Update header
+    if (evData.model) {
+      document.getElementById('model-badge').textContent = evData.model.replace('claude-', '');
+    }
+    document.getElementById('stat-events').textContent = allEvents.length;
+
+    renderFilterButtons();
+    renderTimeline();
+
+    // Scroll to bottom
+    const panel = document.getElementById('timeline-panel');
+    panel.scrollTop = panel.scrollHeight;
+
+    // Load tokens
+    const tokResp = await fetch(`/api/jobs/${JOB_ID}/tokens`);
+    const tokData = await tokResp.json();
+
+    if (tokData.cost) {
+      document.getElementById('stat-tokens').textContent = formatTokens(tokData.cost.total_tokens);
+      document.getElementById('stat-cost').textContent = '$' + tokData.cost.estimated_cost_usd.toFixed(2);
+    }
+
+    updateTokenChart(tokData.cumulative_tokens || []);
+    updateToolChart(tokData.tool_breakdown || []);
+    updateActivityChart(tokData.event_type_breakdown || []);
+
+    // Load submissions
+    await loadSubmissions();
+
+    // Determine if job is live
+    const jobsResp = await fetch('/api/jobs');
+    const jobs = await jobsResp.json();
+    const thisJob = jobs.find(j => j.id === JOB_ID);
+    if (thisJob) {
+      const badge = document.getElementById('status-badge');
+      badge.textContent = thisJob.status;
+      badge.className = 'status-badge ' + thisJob.status;
+      isLive = thisJob.status === 'running';
+    }
+
+    // Start SSE if live
+    if (isLive) {
+      startSSE();
+    }
+
+  } catch (e) {
+    console.error('Failed to load job data:', e);
+  }
+}
+
+function startSSE() {
+  if (evtSource) evtSource.close();
+
+  evtSource = new EventSource(`/api/jobs/${JOB_ID}/stream?after=${lastStep}`);
+
+  evtSource.addEventListener('new_event', (e) => {
+    const event = JSON.parse(e.data);
+    appendEvent(event);
+    lastStep = Math.max(lastStep, event.line_num + 1);
+    document.getElementById('stat-events').textContent = allEvents.length;
+    renderFilterButtons();
+  });
+
+  evtSource.addEventListener('metrics', (e) => {
+    const m = JSON.parse(e.data);
+    if (m.cost) {
+      document.getElementById('stat-tokens').textContent = formatTokens(m.cost.total_tokens);
+      document.getElementById('stat-cost').textContent = '$' + m.cost.estimated_cost_usd.toFixed(2);
+    }
+    updateToolChart(m.tool_breakdown || []);
+    updateActivityChart(m.event_type_breakdown || []);
+    // For cumulative chart, refetch full data periodically
+  });
+
+  evtSource.onerror = () => {
+    console.warn('SSE connection lost, retrying in 5s...');
+    setTimeout(() => {
+      if (isLive) startSSE();
+    }, 5000);
+  };
+
+  // Periodically refresh the full cumulative token chart
+  setInterval(async () => {
+    if (!isLive) return;
+    try {
+      const resp = await fetch(`/api/jobs/${JOB_ID}/tokens`);
+      const data = await resp.json();
+      updateTokenChart(data.cumulative_tokens || []);
+    } catch (e) {}
+  }, 10000);
+}
+
+// ── Init ──
+
+document.addEventListener('DOMContentLoaded', () => {
+  initTokenChart();
+  initToolChart();
+  initActivityChart();
+  loadInitialData();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Scientist v3 — Job Monitor</title>
+<style>
+:root {
+  --bg: #090c10;
+  --surface: #10141a;
+  --surface2: #1c2128;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text-dim: #8b949e;
+  --accent: #58a6ff;
+  --green: #3fb950;
+  --yellow: #d29922;
+  --red: #f85149;
+  --purple: #bc8cff;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+.container { max-width: 1280px; margin: 0 auto; padding: 32px 24px; }
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 32px;
+}
+header h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; }
+header h1 span { color: var(--accent); }
+.refresh-info { color: var(--text-dim); font-size: 14px; background: rgba(139, 148, 158, 0.1); padding: 6px 12px; border-radius: 20px; }
+
+/* Filter tabs */
+.filters {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.filter-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+.filter-btn:hover { border-color: var(--text-dim); color: var(--text); transform: translateY(-1px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+.filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); box-shadow: 0 4px 12px rgba(88, 166, 255, 0.2); }
+.filter-btn .count { opacity: 0.8; margin-left: 6px; font-size: 13px; }
+
+/* Jobs table */
+.jobs-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--surface);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+}
+.jobs-table th {
+  text-align: left;
+  padding: 14px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s;
+}
+.jobs-table th:hover { color: var(--accent); }
+.jobs-table td {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  transition: background 0.15s;
+}
+.jobs-table tr:last-child td { border-bottom: none; }
+.jobs-table tr:hover td { background: rgba(88, 166, 255, 0.08); }
+.jobs-table tr { cursor: pointer; }
+
+/* Status badges */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.status-running .status-dot { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
+.status-completed .status-dot { background: var(--text-dim); }
+.status-idle .status-dot { background: var(--yellow); }
+.status-unknown .status-dot { background: var(--border); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.model-badge {
+  background: rgba(188, 140, 255, 0.15);
+  color: var(--purple);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.tokens-cell { font-family: 'SF Mono', SFMono-Regular, Consolas, monospace; font-size: 13px; }
+.cost-cell { color: var(--yellow); font-family: 'SF Mono', SFMono-Regular, Consolas, monospace; font-size: 13px; }
+.task-name { color: var(--text-dim); font-size: 13px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.submissions-badge {
+  background: rgba(63, 185, 80, 0.15);
+  color: var(--green);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-dim);
+}
+.loading { text-align: center; padding: 40px; color: var(--text-dim); }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>AI Scientist v3 — <span>Job Monitor</span></h1>
+    <div class="refresh-info" id="refresh-info">Loading...</div>
+  </header>
+
+  <div class="filters" id="filters"></div>
+
+  <table class="jobs-table" id="jobs-table">
+    <thead>
+      <tr>
+        <th data-sort="status">Status</th>
+        <th data-sort="id">Job</th>
+        <th data-sort="model">Model</th>
+        <th data-sort="tokens">Tokens</th>
+        <th data-sort="cost">Cost</th>
+        <th data-sort="submissions">Submissions</th>
+        <th>Task</th>
+      </tr>
+    </thead>
+    <tbody id="jobs-body">
+      <tr><td colspan="7" class="loading">Loading jobs...</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+let allJobs = [];
+let currentFilter = 'all';
+let sortKey = 'id';
+let sortAsc = false;
+
+function formatTokens(n) {
+  if (!n) return '-';
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(0) + 'K';
+  return String(n);
+}
+
+function renderFilters() {
+  const counts = { all: allJobs.length, running: 0, completed: 0, idle: 0 };
+  allJobs.forEach(j => { counts[j.status] = (counts[j.status] || 0) + 1; });
+
+  const filtersEl = document.getElementById('filters');
+  filtersEl.innerHTML = '';
+  ['all', 'running', 'completed', 'idle'].forEach(f => {
+    if (f !== 'all' && !counts[f]) return;
+    const btn = document.createElement('button');
+    btn.className = 'filter-btn' + (currentFilter === f ? ' active' : '');
+    btn.innerHTML = `${f.charAt(0).toUpperCase() + f.slice(1)}<span class="count">(${counts[f] || 0})</span>`;
+    btn.onclick = () => { currentFilter = f; renderFilters(); renderTable(); };
+    filtersEl.appendChild(btn);
+  });
+}
+
+function renderTable() {
+  let jobs = currentFilter === 'all' ? allJobs : allJobs.filter(j => j.status === currentFilter);
+
+  // Sort
+  jobs.sort((a, b) => {
+    let va, vb;
+    switch (sortKey) {
+      case 'tokens':
+        va = a.tokens?.total_tokens || 0;
+        vb = b.tokens?.total_tokens || 0;
+        break;
+      case 'cost':
+        va = a.tokens?.estimated_cost_usd || 0;
+        vb = b.tokens?.estimated_cost_usd || 0;
+        break;
+      case 'submissions':
+        va = a.submissions; vb = b.submissions;
+        break;
+      default:
+        va = a[sortKey] || ''; vb = b[sortKey] || '';
+    }
+    if (va < vb) return sortAsc ? -1 : 1;
+    if (va > vb) return sortAsc ? 1 : -1;
+    return 0;
+  });
+
+  const tbody = document.getElementById('jobs-body');
+  if (!jobs.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No jobs found</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = jobs.map(j => `
+    <tr onclick="window.location='/job/${j.id}'">
+      <td>
+        <span class="status status-${j.status}">
+          <span class="status-dot"></span>
+          ${j.status}
+        </span>
+      </td>
+      <td>${j.id}</td>
+      <td><span class="model-badge">${j.model}</span></td>
+      <td class="tokens-cell">${formatTokens(j.tokens?.total_tokens)}</td>
+      <td class="cost-cell">${j.tokens?.estimated_cost_usd ? '$' + j.tokens.estimated_cost_usd.toFixed(2) : '-'}</td>
+      <td>${j.submissions ? '<span class="submissions-badge">v' + j.submissions + '</span>' : '-'}</td>
+      <td class="task-name" title="${(j.task_name || '').replace(/"/g, '&quot;')}">${j.task_name || '-'}</td>
+    </tr>
+  `).join('');
+}
+
+async function fetchJobs() {
+  try {
+    const resp = await fetch('/api/jobs');
+    allJobs = await resp.json();
+    renderFilters();
+    renderTable();
+    document.getElementById('refresh-info').textContent =
+      `${allJobs.length} jobs | Updated ${new Date().toLocaleTimeString()}`;
+  } catch (e) {
+    document.getElementById('jobs-body').innerHTML =
+      '<tr><td colspan="7" class="empty-state">Error loading jobs</td></tr>';
+  }
+}
+
+// Sort headers
+document.querySelectorAll('.jobs-table th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.sort;
+    if (sortKey === key) sortAsc = !sortAsc;
+    else { sortKey = key; sortAsc = true; }
+    renderTable();
+  });
+});
+
+// Initial load + auto-refresh
+fetchJobs();
+setInterval(fetchJobs, 10000);
+</script>
+</body>
+</html>
