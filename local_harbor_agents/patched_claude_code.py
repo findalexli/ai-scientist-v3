@@ -80,6 +80,7 @@ copy_file() {{
 
 sync_artifacts() {{
     SESSIONS_DIR="${{CLAUDE_CONFIG_DIR:-/logs/agent/sessions}}"
+    chmod -R a+rX "$SESSIONS_DIR" 2>/dev/null || true
     for DEST in /logs/agent/artifacts /logs/verifier/artifacts; do
         mkdir -p "$DEST" 2>/dev/null || true
         copy_tree "/app/experiment_codebase" "experiment_codebase"
@@ -123,15 +124,18 @@ wait "$SYNC_PID" 2>/dev/null || true
 sync_artifacts
 exit "$AGENT_EXIT"
 """
-        return f"bash -lc {shlex.quote(sync_script)}"
+        return f"bash -c {shlex.quote(sync_script)}"
 
     def create_run_agent_commands(self, instruction: str) -> list[ExecInput]:
         commands = super().create_run_agent_commands(instruction)
         if len(commands) < 2:
             return commands
 
-        run_command = commands[1]
-        commands[1] = ExecInput(
+        # Wrap the last command (the actual agent run) with artifact sync.
+        # commands[0] is setup; commands[-1] is the agent invocation.
+        idx = len(commands) - 1
+        run_command = commands[idx]
+        commands[idx] = ExecInput(
             command=self._wrap_with_artifact_sync(run_command.command),
             cwd=run_command.cwd,
             env=run_command.env,

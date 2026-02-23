@@ -173,7 +173,7 @@ class TestPatchedClaudeCodeWrap(unittest.TestCase):
         self.assertIn("chmod", self.wrapped)
 
     def test_wrapped_in_bash(self):
-        self.assertTrue(self.wrapped.startswith("bash -lc "))
+        self.assertTrue(self.wrapped.startswith("bash -c "))
 
 
 class TestPatchedClaudeCodeCommands(unittest.TestCase):
@@ -330,7 +330,7 @@ class TestPatchedGeminiCliWrap(unittest.TestCase):
         self.assertNotIn("chmod", self.wrapped)
 
     def test_wrapped_in_bash(self):
-        self.assertTrue(self.wrapped.startswith("bash -lc "))
+        self.assertTrue(self.wrapped.startswith("bash -c "))
 
 
 class TestPatchedGeminiCliCommands(unittest.TestCase):
@@ -401,6 +401,45 @@ class TestArtifactSyncParity(unittest.TestCase):
     def test_both_write_to_verifier_artifacts(self):
         self.assertIn("/logs/verifier/artifacts", self.cc_wrapped)
         self.assertIn("/logs/verifier/artifacts", self.gc_wrapped)
+
+
+# ===========================================================================
+# Claude chmod-in-sync test
+# ===========================================================================
+
+class TestClaudeChmodInSync(unittest.TestCase):
+    """Verify chmod runs inside sync_artifacts, not just post-agent."""
+
+    def test_chmod_inside_sync_artifacts(self):
+        agent = PatchedClaudeCode(artifact_sync_interval_sec=60)
+        wrapped = agent._wrap_with_artifact_sync("echo test")
+        # Extract the sync_artifacts function body
+        sync_start = wrapped.index("sync_artifacts() {")
+        # Find the closing brace by counting braces
+        depth = 0
+        sync_end = sync_start
+        for i, ch in enumerate(wrapped[sync_start:], sync_start):
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    sync_end = i
+                    break
+        sync_body = wrapped[sync_start:sync_end]
+        self.assertIn("chmod -R a+rX", sync_body)
+
+    def test_chmod_runs_before_copy_in_sync(self):
+        """chmod should appear before the copy calls inside sync_artifacts body."""
+        agent = PatchedClaudeCode()
+        wrapped = agent._wrap_with_artifact_sync("echo test")
+        # Extract just the sync_artifacts body
+        sync_start = wrapped.index("sync_artifacts() {")
+        sync_body = wrapped[sync_start:]
+        chmod_pos = sync_body.index("chmod -R a+rX")
+        # First copy_tree call inside sync_artifacts (not the function definition)
+        copy_pos = sync_body.index('copy_tree "/app')
+        self.assertLess(chmod_pos, copy_pos, "chmod should run before copying artifacts")
 
 
 if __name__ == "__main__":

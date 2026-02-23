@@ -23,14 +23,14 @@ v2 used ~5000 lines of Python to orchestrate a 4-stage BFS tree search with hard
 ### Harbor Mode (Isolated Docker)
 
 ```bash
-./run.sh idea.json                                                # Default: Claude Opus 4.6, 2hr timeout
-./run.sh idea.json --model anthropic/claude-sonnet-4-5-20250929   # Use Sonnet
-./run.sh idea.json --agent gemini-cli                             # Use Gemini CLI
-./run.sh idea.json --agent gemini-cli --model google/gemini-3.1-pro-preview  # Gemini + custom model
-./run.sh idea.json --timeout 7200                                 # 2hr timeout
-./run.sh idea.json --gpus 1                                       # Local Docker with GPU
-./run.sh idea.json --env modal --gpus 1                           # Modal cloud with GPU
-./run.sh idea.json --env modal --gpus 1 --artifact-sync-interval 120
+./run.sh idea_tabulartransformer.json                                                # Default: Claude Opus 4.6, 2hr timeout
+./run.sh idea_tabulartransformer.json --model anthropic/claude-sonnet-4-5-20250929   # Use Sonnet
+./run.sh idea_tabulartransformer.json --agent gemini-cli                             # Use Gemini CLI
+./run.sh idea_tabulartransformer.json --agent gemini-cli --model google/gemini-3.1-pro-preview  # Gemini + custom model
+./run.sh idea_tabulartransformer.json --timeout 7200                                 # 2hr timeout
+./run.sh idea_tabulartransformer.json --gpus 1                                       # Local Docker with GPU
+./run.sh idea_tabulartransformer.json --env modal --gpus 1                           # Modal cloud with GPU
+./run.sh idea_tabulartransformer.json --env modal --gpus 1 --artifact-sync-interval 120
 ```
 
 ### Agent Selection
@@ -62,7 +62,7 @@ Use `--use-upstream-agent` if you want Harbor's built-in agent behavior (no arti
 ```bash
 cd ai_scientist_v3
 claude
-> Read idea.json and conduct this research
+> Read idea_tabulartransformer.json and conduct this research
 ```
 
 The `/search-papers` skill and `scripts/submit_for_review.sh` work against the local filesystem. No isolation — artifacts write directly to the repo directory.
@@ -109,7 +109,7 @@ Source templates are never modified — `run.sh` generates `instruction.md` and 
 ### Resuming a Timed-Out Run
 
 ```bash
-./run.sh idea.json --resume-from jobs/2026-02-14__12-10-51/ --timeout 7200
+./run.sh idea_tabulartransformer.json --resume-from jobs/2026-02-14__12-10-51/ --timeout 7200
 ```
 
 This bakes the previous run's artifacts into the new container and injects a "Resumed Session" section so the agent continues rather than starts over.
@@ -119,7 +119,7 @@ This bakes the previous run's artifacts into the new container and injects a "Re
 After reviewing a run's output, you can send feedback to steer the next run:
 
 ```bash
-./run.sh idea.json --resume-from jobs/2026-02-14__12-10-51/ --feedback "The ablation study is missing a comparison without the temporal zoom component. Also add error bars to Figure 3."
+./run.sh idea_tabulartransformer.json --resume-from jobs/2026-02-14__12-10-51/ --feedback "The ablation study is missing a comparison without the temporal zoom component. Also add error bars to Figure 3."
 ```
 
 The `--feedback` text is injected into the instruction as a "Feedback from Previous Run" section. The agent sees it at the start of the session and prioritizes addressing it. Combine with `--resume-from` so the agent builds on existing artifacts rather than starting over.
@@ -130,10 +130,10 @@ The `--feedback` text is injected into the instruction as a "Feedback from Previ
 
 ```bash
 # Local Docker — requires NVIDIA Container Toolkit
-./run.sh idea.json --gpus 1
+./run.sh idea_tabulartransformer.json --gpus 1
 
 # Modal cloud
-./run.sh idea.json --env modal --gpus 1
+./run.sh idea_tabulartransformer.json --env modal --gpus 1
 ```
 
 When `--gpus` is specified:

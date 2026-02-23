@@ -5,7 +5,12 @@ from harbor.agents.installed.gemini_cli import GeminiCli
 
 
 class PatchedGeminiCli(GeminiCli):
-    """Drop-in GeminiCli replacement with artifact syncing during execution."""
+    """Drop-in GeminiCli replacement with artifact syncing during execution.
+
+    Upstream GeminiCli handles ATIF trajectory conversion and content-format
+    fixing natively (since harbor commit 5a3a6db).  This subclass only adds
+    periodic artifact syncing so partial work is preserved if the run times out.
+    """
 
     def __init__(self, artifact_sync_interval_sec: int = 180, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -74,15 +79,18 @@ wait "$SYNC_PID" 2>/dev/null || true
 sync_artifacts
 exit "$AGENT_EXIT"
 """
-        return f"bash -lc {shlex.quote(sync_script)}"
+        return f"bash -c {shlex.quote(sync_script)}"
 
     def create_run_agent_commands(self, instruction: str) -> list[ExecInput]:
         commands = super().create_run_agent_commands(instruction)
-        if len(commands) < 1:
+        if not commands:
             return commands
 
-        run_command = commands[0]
-        commands[0] = ExecInput(
+        # Wrap the last command (the actual agent run) with artifact sync.
+        # Upstream may prepend optional setup commands (e.g. MCP registration).
+        idx = len(commands) - 1
+        run_command = commands[idx]
+        commands[idx] = ExecInput(
             command=self._wrap_with_artifact_sync(run_command.command),
             cwd=run_command.cwd,
             env=run_command.env,

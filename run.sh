@@ -1,24 +1,21 @@
 #!/bin/bash
 # Run an AI Scientist experiment in Harbor
 #
-# Usage: ./run.sh <idea.json> [OPTIONS]
+# Usage: ./run.sh <idea_*.json> [OPTIONS]
 #
 # Examples:
-#   ./run.sh idea.json                                                # Local Docker, CPU
-#   ./run.sh idea.json --gpus 1                                       # Local Docker, GPU
-#   ./run.sh idea.json --model anthropic/claude-sonnet-4-5-20250929   # Use Sonnet
-#   ./run.sh idea.json --env modal                                    # Modal cloud, CPU
-#   ./run.sh idea.json --env modal --gpus 1                           # Modal cloud, GPU
-#   ./run.sh idea.json --env modal --gpus 1 --timeout 7200            # Modal, GPU, 2hr
-#   ./run.sh idea.json --resume-from jobs/2026-02-14__12-10-51/       # Resume previous
-#   ./run.sh idea.json --agent gemini-cli                             # Gemini CLI agent
-#   ./run.sh idea.json --agent gemini-cli --model google/gemini-3.1-pro-preview  # Gemini + custom model
+#   ./run.sh idea_tabulartransformer.json                              # Local Docker, CPU
+#   ./run.sh idea_tabulartransformer.json --gpus 1                     # Local Docker, GPU
+#   ./run.sh idea_tabulartransformer.json --model anthropic/claude-sonnet-4-5-20250929
+#   ./run.sh idea_tabulartransformer.json --env modal --gpus 1         # Modal cloud, GPU
+#   ./run.sh idea_tabulartransformer.json --resume-from jobs/tabulartransformer__2026-02-22__12-00-00/
+#   ./run.sh idea_videoqa_with_tool.json --agent gemini-cli            # Gemini CLI agent
 
 set -euo pipefail
 
 IDEA_JSON=""
 MODEL=""           # empty = auto-select based on agent type
-TIMEOUT="7200"
+TIMEOUT="14400"
 RESUME_FROM=""
 ENV_TYPE=""        # empty = docker (default)
 GPUS="0"
@@ -113,6 +110,13 @@ if [[ ! -f "$IDEA_JSON" ]]; then
     echo "Error: $IDEA_JSON not found" >&2
     exit 1
 fi
+
+# --- Extract idea name for job naming ---
+# Strip path and extension: idea_tabulartransformer.json -> tabulartransformer
+IDEA_BASENAME="$(basename "$IDEA_JSON" .json)"
+IDEA_NAME="${IDEA_BASENAME#idea_}"       # remove "idea_" prefix if present
+IDEA_NAME="${IDEA_NAME#idea}"            # remove "idea" prefix if present (no underscore)
+IDEA_NAME="${IDEA_NAME:-unknown}"        # fallback
 
 # --- Resolve agent type defaults ---
 case "$AGENT_TYPE" in
@@ -275,7 +279,7 @@ if [[ -n "$PREV_ARTIFACTS" ]]; then
     [[ -f "$PREV_ARTIFACTS/paper.tex" ]] && EXISTING="$EXISTING\n- paper.tex"
     [[ -f "$PREV_ARTIFACTS/review.json" ]] && EXISTING="$EXISTING\n- review.json"
     [[ -d "$PREV_ARTIFACTS/submissions" ]] && \
-        EXISTING="$EXISTING\n- submissions/ ($(ls "$PREV_ARTIFACTS/submissions/" 2>/dev/null | grep -c '^v') versions)"
+        EXISTING="$EXISTING\n- submissions/ ($(ls "$PREV_ARTIFACTS/submissions/" 2>/dev/null | grep -c '^v' || true) versions)"
 
     RESUME_NOTE="
 ## Resumed Session
@@ -308,18 +312,24 @@ open(sys.argv[4], 'w').write(result)
 " "$INSTRUCTION_TEMPLATE" "$IDEA_JSON" "$RESUME_NOTE" "$INSTRUCTION_OUT"
 
 # --- Build harbor run command ---
-# Harbor enforces timeout from task.toml [agent] timeout_sec * --timeout-multiplier.
-# Compute multiplier so the user's --timeout value is actually enforced.
-TASK_TOML_TIMEOUT=7200  # must match harbor-task/task.toml [agent] timeout_sec
-TIMEOUT_MULTIPLIER=$(python3 -c "print($TIMEOUT / $TASK_TOML_TIMEOUT)")
+TIMESTAMP="$(date +%Y-%m-%d__%H-%M-%S)"
+JOB_NAME="${IDEA_NAME}__${TIMESTAMP}"
+
+# Patch task.toml agent timeout to match the user's --timeout value.
+# Harbor uses task.toml timeout_sec * --timeout-multiplier for both the agent
+# and setup timeouts.  By writing the desired timeout directly into task.toml
+# and keeping the multiplier at 1.0, the setup timeout stays at its default
+# (360s) — enough for Docker build + agent install.
+sed -i "s/^timeout_sec = .*/timeout_sec = $TIMEOUT/" "$TASK_DIR/task.toml"
 
 HARBOR_ARGS=(
     harbor run
     -p "$TASK_DIR/"
     -m "$MODEL"
-    --timeout-multiplier "$TIMEOUT_MULTIPLIER"
-    --ak "timeout_sec=$TIMEOUT"
+    --timeout-multiplier 1.0
     -n 1
+    -o "$SCRIPT_DIR/jobs/"
+    --job-name "$JOB_NAME"
 )
 
 if [[ "$USE_UPSTREAM_AGENT" == "1" ]]; then

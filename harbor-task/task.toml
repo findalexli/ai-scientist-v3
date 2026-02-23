@@ -12,7 +12,7 @@ storage_mb = 10000
 allow_internet = true   # Needed for Semantic Scholar API, dataset downloads
 
 [agent]
-timeout_sec = 7200      # 2 hours for full pipeline
+timeout_sec = 14400     # 4 hours default (overridden by run.sh --timeout)
 
 [verifier]
 timeout_sec = 120
