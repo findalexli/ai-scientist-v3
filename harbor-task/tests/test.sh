@@ -47,7 +47,7 @@ else
 fi
 
 # Check review (accept review.json at root or reviewer response in submissions)
-if [ -f /app/review.json ] || [ -n "$(find /app/submissions -name 'response.json' -path '*/reviewer_communications/*' 2>/dev/null | head -1)" ]; then
+if [ -f /app/review.json ] || [ -n "$(find /app/submissions \( -name 'response.json' -o -name 'response.md' \) -path '*/reviewer_communications/*' 2>/dev/null | head -1)" ]; then
     SCORE=$((SCORE + 1))
     echo "OK: review"
 else

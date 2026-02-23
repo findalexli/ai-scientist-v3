@@ -30,17 +30,17 @@ API keys (via environment variables, if configured):
 3. **Run Experiments** — Use your best judgment on methodology: baselines, ablations, statistical rigor appropriate to the claims. Run multiple random seeds for error bars.
 4. **Plot Results** — Create publication-quality figures in `figures/`. Visually inspect each PNG with the `Read` tool before finalizing.
 5. **Write Paper** — Fill in `latex/template.tex`. Compile with `bash scripts/compile_latex.sh latex/`. Must be 4 pages of main text (excluding references and appendix). After compilation, visually inspect the PDF with the `Read` tool to catch formatting issues.
-6. **Submit for Review** — Run the external reviewer:
+6. **Submit for Review** — Run the reviewer:
    ```bash
    bash scripts/submit_for_review.sh latex/template.tex
    ```
-   This calls the external reviewer API, saves the response, and creates a versioned snapshot in `submissions/v{N}_{timestamp}/`. Use `timeout: 180000` (3 minutes) for the Bash tool call since the API takes ~30 seconds.
-7. **Read Reviewer Feedback** — Read the reviewer's questions from `submissions/v{N}_{timestamp}/reviewer_communications/response.json` (path printed by the script). The response contains a `question` field.
+   This generates a review, saves the response, and creates a versioned snapshot in `submissions/v{N}_{timestamp}/`. Use `timeout: 600000` (10 minutes) for the Bash tool call.
+7. **Read Reviewer Feedback** — Read the reviewer's feedback from `submissions/v{N}_{timestamp}/reviewer_communications/response.md` (path printed by the script). The file starts with a `## Review` section containing the review.
 8. **Continue Iterate, autonomously** — Address the reviewer's questions and weaknesses:
    - Run additional experiments if needed
    - Search for additional literature with `/search-papers` to contextualize new results or address gaps
    - Improve the paper, recompile, and visually inspect the PDF again, including the appendix
-   - **Write your rebuttal** back into the same `response.json` by adding a `"rebuttal"` field explaining what you changed and why. This creates a record of the conversation with the reviewer.
+   - **Write your rebuttal** by appending a `## Rebuttal` section to the same `response.md` file, explaining what you changed and why. This creates a record of the conversation with the reviewer.
    - Resubmit with `bash scripts/submit_for_review.sh latex/template.tex`
    - Repeat until the reviewer's questions are satisfactorily addressed
 

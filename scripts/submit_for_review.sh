@@ -6,14 +6,19 @@
 #   base_dir:  Workspace root (default: /app, or parent of scripts/ if not in container)
 #
 # What this does:
-#   1. Calls extract_and_generate_questions.sh to get review questions from the
-#      external reviewer model API
+#   1. Generates a review (via external API or Claude Code subagent)
 #   2. Creates a versioned snapshot in submissions/v{N}_{timestamp}/ containing:
 #      - paper.tex, paper.pdf
 #      - experiment_codebase/
 #      - figures/
-#      - reviewer_communications/response.json (raw API response)
+#      - reviewer_communications/response.md
 #   3. Updates submissions/version_log.json
+#
+# Environment variables:
+#   REVIEWER_MODE  — "api" (default) uses external reviewer API (works with any runtime)
+#                    "subagent" uses Claude Code reviewer agent (.claude/agents/reviewer.md)
+#                    NOTE: "subagent" requires the Claude Code CLI (`claude` command).
+#                    It will NOT work with Gemini CLI or other agent runtimes.
 #
 # One call = one version. Deterministic, atomic, no LLM in the loop.
 
@@ -43,20 +48,49 @@ EXTRACT_SCRIPT="$BASE_DIR/.claude/skills/review-paper/scripts/extract_and_genera
 
 mkdir -p "$SUBMISSIONS_DIR"
 
-# --- Step 1: Call external reviewer model ---
-echo "=== Submitting paper for external review ==="
+REVIEWER_MODE="${REVIEWER_MODE:-api}"
+
+# --- Step 1: Generate review ---
+echo "=== Submitting paper for review ==="
 echo "Paper: $TEX_PATH"
+echo "Reviewer mode: $REVIEWER_MODE"
 
 RAW_RESPONSE="$BASE_DIR/reviewer_raw_response.json"
 
-if [ ! -f "$EXTRACT_SCRIPT" ]; then
-    echo "Error: extract_and_generate_questions.sh not found at $EXTRACT_SCRIPT" >&2
-    exit 1
-fi
+if [ "$REVIEWER_MODE" = "subagent" ]; then
+    # Requires Claude Code CLI. Will not work with Gemini or other runtimes.
+    if ! command -v claude &>/dev/null; then
+        echo "Error: REVIEWER_MODE=subagent requires the Claude Code CLI." >&2
+        exit 1
+    fi
 
-echo "Calling external reviewer model (this takes ~30 seconds)..."
-bash "$EXTRACT_SCRIPT" "$TEX_PATH" > "$RAW_RESPONSE"
-echo "External reviewer response received."
+    echo "Invoking reviewer subagent (this may take several minutes)..."
+
+    # CLAUDECODE="" clears the nesting guard so claude can launch from within a running session.
+    # --output-format text gives us the review directly on stdout — no parsing needed.
+    if ! CLAUDECODE="" claude -p \
+        --agent reviewer \
+        --model opus \
+        --output-format text \
+        --dangerously-skip-permissions \
+        "Review the research submission. The paper is at $TEX_PATH. Inspect the full workspace: experiment_codebase/, figures/, literature/, and latex/. Follow your review procedure and produce your review." \
+        > "$RAW_RESPONSE" 2>"$BASE_DIR/reviewer_subagent_stderr.log"; then
+        echo "Warning: Reviewer subagent returned non-zero exit code." >&2
+    fi
+
+    echo "Reviewer subagent complete."
+
+else
+    # --- External API reviewer (original behavior) ---
+    if [ ! -f "$EXTRACT_SCRIPT" ]; then
+        echo "Error: extract_and_generate_questions.sh not found at $EXTRACT_SCRIPT" >&2
+        exit 1
+    fi
+
+    echo "Calling external reviewer model (this takes ~30 seconds)..."
+    bash "$EXTRACT_SCRIPT" "$TEX_PATH" > "$RAW_RESPONSE"
+    echo "External reviewer response received."
+fi
 
 # --- Step 2: Determine next version number ---
 if [ -f "$VERSION_LOG" ]; then
@@ -101,18 +135,26 @@ if [ -d "$BASE_DIR/figures" ]; then
     cp -r "$BASE_DIR/figures" "$VERSION_DIR/figures"
 fi
 
-# Save reviewer communications — strip extracted_text to avoid bloating agent context
-# The agent already has the paper text; it only needs the question back.
-cp "$RAW_RESPONSE" "$VERSION_DIR/reviewer_communications/raw_response.json"
-python3 -c "
+# Save reviewer communications
+RESPONSE_FILE="$VERSION_DIR/reviewer_communications/response.md"
+
+if [ "$REVIEWER_MODE" = "subagent" ]; then
+    # Subagent mode: RAW_RESPONSE is plain text (the review)
+    cp "$RAW_RESPONSE" "$VERSION_DIR/reviewer_communications/raw_response.txt"
+    { echo "## Review"; echo ""; cat "$RAW_RESPONSE"; echo ""; } > "$RESPONSE_FILE"
+else
+    # API mode: RAW_RESPONSE is JSON, extract the question
+    cp "$RAW_RESPONSE" "$VERSION_DIR/reviewer_communications/raw_response.json"
+    python3 -c "
 import json, sys
 with open(sys.argv[1]) as f:
     data = json.load(f)
-# Keep only the question — the extracted_text is redundant for the agent
-output = {'question': data.get('question', '')}
 with open(sys.argv[2], 'w') as f:
-    json.dump(output, f, indent=2)
-" "$RAW_RESPONSE" "$VERSION_DIR/reviewer_communications/response.json"
+    f.write('## Review\n\n')
+    f.write(data.get('question', ''))
+    f.write('\n')
+" "$RAW_RESPONSE" "$RESPONSE_FILE"
+fi
 
 # --- Step 4: Update version log ---
 python3 -c "
@@ -129,17 +171,20 @@ version_entry = {
     'version': $NEXT_VERSION,
     'timestamp': '$TIMESTAMP',
     'directory': 'v${NEXT_VERSION}_${TIMESTAMP}',
+    'reviewer_mode': '$REVIEWER_MODE',
     'paper_tex': os.path.exists('$VERSION_DIR/paper.tex'),
     'paper_pdf': os.path.exists('$VERSION_DIR/paper.pdf'),
     'has_experiments': os.path.isdir('$VERSION_DIR/experiment_codebase'),
     'has_figures': os.path.isdir('$VERSION_DIR/figures'),
 }
 
-# Try to extract the reviewer question from the response
+# Try to extract a preview from the response
 try:
-    with open('$VERSION_DIR/reviewer_communications/response.json') as f:
-        resp = json.load(f)
-    version_entry['reviewer_question_preview'] = resp.get('question', '')[:200]
+    with open('$VERSION_DIR/reviewer_communications/response.md') as f:
+        text = f.read()
+    # Strip the '## Review' header and grab the first 200 chars of content
+    preview = text.replace('## Review', '', 1).strip()[:200]
+    version_entry['reviewer_preview'] = preview
 except:
     pass
 
@@ -158,7 +203,7 @@ echo "  Paper:     $([ -f "$VERSION_DIR/paper.tex" ] && echo 'yes' || echo 'no')
 echo "  PDF:       $([ -f "$VERSION_DIR/paper.pdf" ] && echo 'yes' || echo 'no')"
 echo "  Experiments: $([ -d "$VERSION_DIR/experiment_codebase" ] && echo 'yes' || echo 'no')"
 echo "  Figures:   $([ -d "$VERSION_DIR/figures" ] && echo 'yes' || echo 'no')"
-echo "  Reviewer:  $VERSION_DIR/reviewer_communications/response.json"
+echo "  Reviewer:  $VERSION_DIR/reviewer_communications/response.md"
 echo ""
-echo "Read the reviewer's questions at:"
-echo "  $VERSION_DIR/reviewer_communications/response.json"
+echo "Read the reviewer's feedback at:"
+echo "  $VERSION_DIR/reviewer_communications/response.md"
