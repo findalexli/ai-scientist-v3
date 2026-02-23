@@ -2,7 +2,7 @@
 Tests for ATIF trajectory generation pipeline.
 
 Covers:
-  - scripts/generate_atif.py: find_agent_dir, generate_claude_atif, generate_gemini_atif
+  - scripts/backfill_trajectory.py: find_agent_dir, generate_claude_atif, generate_gemini_atif
   - viewer/app.py: find_agent_dir, generate_trajectory, /api/jobs/{job_id}/trajectory
 
 Run with:  python3 tests/test_trajectory_management.py
@@ -21,14 +21,14 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 # ===========================================================================
-# generate_atif.py unit tests (import functions directly)
+# backfill_trajectory.py unit tests (import functions directly)
 # ===========================================================================
 
 # We can test find_agent_dir without Harbor since it's pure path logic
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 # Can't import generate_atif directly because it imports harbor at module level.
 # Instead, extract the find_agent_dir function via exec.
-_generate_atif_source = (REPO_ROOT / "scripts" / "generate_atif.py").read_text()
+_generate_atif_source = (REPO_ROOT / "scripts" / "backfill_trajectory.py").read_text()
 
 # Extract just the find_agent_dir function
 _namespace = {}
@@ -45,7 +45,7 @@ _find_agent_dir = _namespace["find_agent_dir"]
 
 
 class TestGenerateAtifFindAgentDir(unittest.TestCase):
-    """Test find_agent_dir from generate_atif.py."""
+    """Test find_agent_dir from backfill_trajectory.py."""
 
     def setUp(self):
         self.tmpdir = Path(tempfile.mkdtemp())
@@ -242,11 +242,11 @@ class TestTrajectoryEndpoint(unittest.TestCase):
 
 
 # ===========================================================================
-# Integration test: generate_atif.py CLI (requires Harbor Python 3.13)
+# Integration test: backfill_trajectory.py CLI (requires Harbor Python 3.13)
 # ===========================================================================
 
 HARBOR_PYTHON = "/home/alex/.local/share/uv/tools/harbor/bin/python3"
-GENERATE_ATIF = str(REPO_ROOT / "scripts" / "generate_atif.py")
+GENERATE_ATIF = str(REPO_ROOT / "scripts" / "backfill_trajectory.py")
 
 
 @unittest.skipUnless(
@@ -254,7 +254,7 @@ GENERATE_ATIF = str(REPO_ROOT / "scripts" / "generate_atif.py")
     "Harbor Python 3.13 not available"
 )
 class TestGenerateAtifCLI(unittest.TestCase):
-    """Integration tests that run generate_atif.py as a subprocess."""
+    """Integration tests that run backfill_trajectory.py as a subprocess."""
 
     def setUp(self):
         self.tmpdir = Path(tempfile.mkdtemp())
@@ -387,7 +387,7 @@ JOBS_DIR = REPO_ROOT / "jobs"
     "Harbor Python or jobs directory not available"
 )
 class TestRealJobTrajectories(unittest.TestCase):
-    """Validate generate_atif.py against real job data."""
+    """Validate backfill_trajectory.py against real job data."""
 
     def _run_and_validate(self, job_dir: Path):
         result = subprocess.run(

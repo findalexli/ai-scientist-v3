@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Generate ATIF trajectory.json from Harbor agent logs.
+"""Backfill ATIF trajectory.json for old jobs that lack one.
 
-Run with Harbor's Python 3.13:
-    /home/alex/.local/share/uv/tools/harbor/bin/python3 scripts/generate_atif.py --job-dir jobs/2026-02-21__20-21-11
+New jobs generate trajectory.json automatically via Harbor's
+populate_context_post_run.  This script exists only to retroactively
+create trajectories for jobs produced before that upstream feature
+landed (harbor commit 5a3a6db, 2026-02-12).
 
-For Claude: copies claude-code.txt as .jsonl → calls ClaudeCode._convert_events_to_trajectory()
-For Gemini: reads gemini-cli.trajectory.json → fixes content format → calls GeminiCli._convert_gemini_to_atif()
+Usage (requires Harbor's Python, not the project venv):
+    /home/alex/.local/share/uv/tools/harbor/bin/python3 scripts/backfill_trajectory.py --job-dir jobs/<job-id>
 """
 
 import argparse
