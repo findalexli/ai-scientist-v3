@@ -69,6 +69,14 @@ while [[ $# -gt 0 ]]; do
             FEEDBACK="$2"
             shift 2
             ;;
+        --feedback-file)
+            if [[ ! -f "$2" ]]; then
+                echo "Error: feedback file '$2' not found" >&2
+                exit 1
+            fi
+            FEEDBACK="$(cat "$2")"
+            shift 2
+            ;;
         -h|--help)
             echo "Usage: ./run.sh <idea.json> [OPTIONS]"
             echo ""
@@ -86,6 +94,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --use-upstream-agent       Use Harbor's built-in agent (no artifact sync)"
             echo "  --artifact-sync-interval S Artifact sync interval in seconds (default: 180)"
             echo "  --feedback TEXT            Feedback/notes to include in the instruction"
+            echo "  --feedback-file FILE      Read feedback from a file (avoids shell quoting issues)"
             exit 0
             ;;
         *)

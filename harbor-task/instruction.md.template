@@ -7,6 +7,9 @@ publication-ready research paper.
 
 {{IDEA_CONTENT}}
 {{RESUME_CONTEXT}}
+
+## Note: Your idea maynot always be the best idea right out of the gate, treat it as a seed idea to get started, 
+navigate and steer towards impactful, novel work as you experiment, literature review, and interact with the reviewer
 ## Persistent Data Directory
 
 `/data` is a persistent directory mounted from the host. Use it to cache downloaded
