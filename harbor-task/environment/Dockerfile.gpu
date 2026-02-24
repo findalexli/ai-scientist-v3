@@ -11,6 +11,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git lfs install && \
     rm -rf /var/lib/apt/lists/*
 
+# The new PyTorch base image uses system-managed Python (PEP 668).
+# Remove the marker so pip/uv can install packages system-wide in the container.
+RUN rm -f /usr/lib/python3.12/EXTERNALLY-MANAGED
+
 # Install uv for fast, reproducible Python package management
 RUN pip install --no-cache-dir uv
 
