@@ -42,6 +42,7 @@ def is_patched(docker_py: Path) -> bool:
         "def supports_gpus(self) -> bool:\n        return True" in content
         and "gpus: int" in content
         and "gpus=task_env_config.gpus" in content
+        and "_DOCKER_COMPOSE_GPU_PATH =" in content  # class attribute definition, not just usage
     )
 
 
@@ -69,12 +70,20 @@ def patch_docker_py(docker_py: Path) -> bool:
             'memory=f"{task_env_config.memory_mb}M",\n            gpus=task_env_config.gpus,',
         )
 
-    # 4. Add GPU compose file path constant
-    if "_DOCKER_COMPOSE_GPU_PATH" not in content:
-        content = content.replace(
-            '_DOCKER_COMPOSE_NO_NETWORK_PATH = (\n        Path(__file__).parent / "docker-compose-no-network.yaml"\n    )',
-            '_DOCKER_COMPOSE_NO_NETWORK_PATH = (\n        Path(__file__).parent / "docker-compose-no-network.yaml"\n    )\n    _DOCKER_COMPOSE_GPU_PATH = Path(__file__).parent / "docker-compose-gpu.yaml"',
-        )
+    # 4. Add GPU compose file path constant (handles both old and new Harbor formats)
+    if "_DOCKER_COMPOSE_GPU_PATH =" not in content:
+        # New format: uses imported constants (e.g. COMPOSE_NO_NETWORK_PATH)
+        if "_DOCKER_COMPOSE_NO_NETWORK_PATH = COMPOSE_NO_NETWORK_PATH" in content:
+            content = content.replace(
+                "_DOCKER_COMPOSE_NO_NETWORK_PATH = COMPOSE_NO_NETWORK_PATH",
+                "_DOCKER_COMPOSE_NO_NETWORK_PATH = COMPOSE_NO_NETWORK_PATH\n    _DOCKER_COMPOSE_GPU_PATH = Path(__file__).parent / \"docker-compose-gpu.yaml\"",
+            )
+        # Old format: uses inline Path(__file__).parent / ...
+        elif '_DOCKER_COMPOSE_NO_NETWORK_PATH = (\n        Path(__file__).parent / "docker-compose-no-network.yaml"\n    )' in content:
+            content = content.replace(
+                '_DOCKER_COMPOSE_NO_NETWORK_PATH = (\n        Path(__file__).parent / "docker-compose-no-network.yaml"\n    )',
+                '_DOCKER_COMPOSE_NO_NETWORK_PATH = (\n        Path(__file__).parent / "docker-compose-no-network.yaml"\n    )\n    _DOCKER_COMPOSE_GPU_PATH = Path(__file__).parent / "docker-compose-gpu.yaml"',
+            )
 
     # 5. Add GPU compose file to paths when gpus > 0
     if "self._DOCKER_COMPOSE_GPU_PATH" not in content:
