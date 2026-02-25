@@ -4,14 +4,15 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import subprocess
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
 from parse_trajectory import (
@@ -21,8 +22,11 @@ from parse_trajectory import (
     compute_tool_breakdown,
     detect_and_parse,
     estimate_cost,
+    find_agent_activity_path,
     find_artifacts_dir,
-    find_claude_code_path,
+    find_trajectory_path,
+    mask_secrets,
+    mask_secrets_in_text,
 )
 
 app = FastAPI(title="AI Scientist v3 — Job Viewer")
@@ -30,8 +34,22 @@ app = FastAPI(title="AI Scientist v3 — Job Viewer")
 # Global config — set by CLI args
 JOBS_DIR = "./jobs"
 TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "templates")
+REPO_ROOT = os.path.dirname(os.path.dirname(__file__))
 HARBOR_PYTHON = "/home/alex/.local/share/uv/tools/harbor/bin/python3"
 GENERATE_ATIF_SCRIPT = os.path.join(os.path.dirname(os.path.dirname(__file__)), "scripts", "backfill_trajectory.py")
+# Parsed event/cache metadata per job to keep /api/jobs fast across refreshes.
+JOB_PARSE_CACHE: Dict[str, dict] = {}
+JOB_METRICS_CACHE: Dict[str, dict] = {}
+JOBS_LIST_CACHE: Dict[str, Any] = {
+    "jobs_dir": None,
+    "expires_at": 0.0,
+    "payload": None,
+}
+JOBS_LIST_CACHE_TTL_SEC = 3.0
+IDEA_NAME_PATTERNS = [
+    re.compile(r'"Name"\s*:\s*"([^"]+)"'),
+    re.compile(r'\\"Name\\"\s*:\s*\\"([^"\\]+)\\"'),
+]
 
 
 # ---------------------------------------------------------------------------
@@ -98,15 +116,153 @@ def read_config(job_dir: str) -> dict:
     return {}
 
 
+def _extract_idea_stem(job_name: str) -> Optional[str]:
+    """Extract idea stem from '<stem>__YYYY-MM-DD__HH-MM-SS' naming."""
+    if not job_name:
+        return None
+    m = re.match(r"^(.+?)__\d{4}-\d{2}-\d{2}__\d{2}-\d{2}-\d{2}$", job_name)
+    if not m:
+        return None
+    stem = m.group(1).strip("_")
+    # Legacy names like '2026-02-21__20-39-12' should not map to idea_2026-02-21.json.
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", stem):
+        return None
+    return stem or None
+
+
+def _idea_path_candidates(stem: str) -> List[str]:
+    return [
+        os.path.join(REPO_ROOT, f"idea_{stem}.json"),
+        os.path.join(REPO_ROOT, "ideas", f"idea_{stem}.json"),
+        os.path.join(REPO_ROOT, f"{stem}.json"),
+        os.path.join(REPO_ROOT, "ideas", f"{stem}.json"),
+    ]
+
+
+def _iter_idea_files() -> List[str]:
+    base = Path(REPO_ROOT)
+    files = list(base.glob("idea_*.json")) + list((base / "ideas").glob("idea_*.json"))
+    return [str(p) for p in sorted(files)]
+
+
+def _extract_idea_name_from_text(text: str) -> Optional[str]:
+    if not text:
+        return None
+    for pat in IDEA_NAME_PATTERNS:
+        m = pat.search(text)
+        if m:
+            name = (m.group(1) or "").strip()
+            if name:
+                return name
+    return None
+
+
+def _read_head(path: str, limit: int = 600_000) -> str:
+    try:
+        with open(path, "r", errors="replace") as f:
+            return f.read(limit)
+    except OSError:
+        return ""
+
+
+def _extract_idea_name_from_job_artifacts(job_dir: str) -> Optional[str]:
+    """Best-effort inference for legacy jobs lacking idea stem in job_id."""
+    if not job_dir or not os.path.isdir(job_dir):
+        return None
+
+    # Prefer command input snapshots if available (smaller and direct).
+    for entry in sorted(os.listdir(job_dir)):
+        if not entry.startswith("harbor-task"):
+            continue
+        cmd_root = Path(job_dir) / entry / "agent"
+        for cmd_txt in sorted(cmd_root.glob("command-*/command.txt")):
+            name = _extract_idea_name_from_text(_read_head(str(cmd_txt), limit=250_000))
+            if name:
+                return name
+
+    # Fallback to trajectory content.
+    traj_path = find_trajectory_path(job_dir)
+    if traj_path:
+        name = _extract_idea_name_from_text(_read_head(traj_path))
+        if name:
+            return name
+    return None
+
+
+def resolve_idea_file(job_id: str, config: dict, job_dir: Optional[str] = None) -> Tuple[Optional[str], Optional[str]]:
+    """Resolve idea JSON by job-name stem, then legacy artifact inference."""
+    stems: List[str] = []
+    for candidate in [job_id, str(config.get("job_name", ""))]:
+        stem = _extract_idea_stem(candidate)
+        if stem and stem not in stems:
+            stems.append(stem)
+
+    for stem in stems:
+        for path in _idea_path_candidates(stem):
+            if os.path.isfile(path):
+                return stem, path
+
+    inferred_name = _extract_idea_name_from_job_artifacts(job_dir or "")
+    if inferred_name:
+        for path in _idea_path_candidates(inferred_name):
+            if os.path.isfile(path):
+                return inferred_name, path
+
+        # Fallback: match by JSON `Name` field in idea files.
+        for path in _iter_idea_files():
+            try:
+                with open(path) as f:
+                    data = json.load(f)
+                if str(data.get("Name", "")).strip() == inferred_name:
+                    return inferred_name, path
+            except (json.JSONDecodeError, OSError):
+                continue
+
+    return inferred_name or (stems[0] if stems else None), None
+
+
+def load_idea_payload(job_id: str, config: dict, job_dir: Optional[str] = None) -> dict:
+    """Load pretty JSON text for the job's original idea input."""
+    stem, path = resolve_idea_file(job_id, config, job_dir=job_dir)
+    if not stem or not path:
+        return {"found": False, "stem": stem, "source": None, "content": None, "format": None}
+
+    source = os.path.relpath(path, REPO_ROOT)
+    try:
+        with open(path) as f:
+            parsed = json.load(f)
+        text = json.dumps(parsed, indent=2)
+        return {
+            "found": True,
+            "stem": stem,
+            "source": source,
+            "content": mask_secrets_in_text(text),
+            "format": "json",
+        }
+    except (json.JSONDecodeError, OSError):
+        try:
+            with open(path, "r", errors="replace") as f:
+                text = f.read()
+            return {
+                "found": True,
+                "stem": stem,
+                "source": source,
+                "content": mask_secrets_in_text(text),
+                "format": "text",
+            }
+        except OSError:
+            return {"found": False, "stem": stem, "source": source, "content": None, "format": None}
+
+
 def get_job_status(job_dir: str) -> str:
     """Determine if a job is running, completed, or failed."""
-    cc_path = find_claude_code_path(job_dir)
-    if not cc_path:
+    activity_path = find_agent_activity_path(job_dir)
+    if not activity_path:
         return "unknown"
 
     # Check mtime — if modified < 5 min ago → running
     try:
-        mtime = os.path.getmtime(cc_path)
+        mtime = os.path.getmtime(activity_path)
         age = time.time() - mtime
         if age < 300:  # 5 minutes
             return "running"
@@ -129,17 +285,19 @@ def get_job_status(job_dir: str) -> str:
 
 def get_submission_count(job_dir: str) -> int:
     """Count submissions from version_log.json."""
-    arts = find_artifacts_dir(job_dir)
-    if not arts:
-        return 0
-    vlog = os.path.join(arts, "submissions", "version_log.json")
-    if os.path.exists(vlog):
+    best = 0
+    for root in iter_submission_roots(job_dir):
+        vlog = os.path.join(root, "version_log.json")
         try:
             with open(vlog) as f:
                 data = json.load(f)
-            return data.get("current_version", len(data.get("versions", [])))
+            count = data.get("current_version", len(data.get("versions", [])))
+            if isinstance(count, int):
+                best = max(best, count)
         except (json.JSONDecodeError, OSError):
-            pass
+            continue
+    if best:
+        return best
     return 0
 
 
@@ -155,61 +313,307 @@ def get_model_name(config: dict) -> str:
     return "unknown"
 
 
+def resolve_cost_model(config: dict, parsed_model: Optional[str]) -> str:
+    """Pick the most reliable model identifier for pricing."""
+    cfg_model = config.get("agents", [{}])[0].get("model_name")
+    return cfg_model or parsed_model or "claude-opus-4-6"
+
+
+def load_job_events(job_dir: str, after_line: int = 0, allow_backfill: bool = False) -> ParseResult:
+    """Load parsed events, preferring Harbor trajectory and backfilling if needed."""
+    result = detect_and_parse(job_dir, after_line=after_line)
+    if result.events or result.total_lines > 0 or not allow_backfill:
+        return result
+
+    # Fallback: if trajectory is missing or stale for a new job, try generating it once.
+    generate_trajectory(job_dir)
+    return detect_and_parse(job_dir, after_line=after_line)
+
+
+def _build_activity_cache_key(job_dir: str) -> Optional[tuple]:
+    """Stable cache key for a job's active transcript/trajectory."""
+    activity_path = find_agent_activity_path(job_dir)
+    if not activity_path:
+        return None
+    try:
+        st = os.stat(activity_path)
+        return (activity_path, st.st_mtime_ns, st.st_size)
+    except OSError:
+        return None
+
+
+def get_job_metrics(
+    job_dir: str,
+    config: dict,
+    allow_backfill: bool = True,
+    parsed: Optional[ParseResult] = None,
+) -> dict:
+    """Return cached per-job token/cost/breakdown metrics."""
+    cache_key = _build_activity_cache_key(job_dir)
+    cached = JOB_METRICS_CACHE.get(job_dir)
+    if cached and cached.get("cache_key") == cache_key:
+        return cached.get("data", {})
+
+    result = parsed or load_job_events(job_dir, allow_backfill=allow_backfill)
+    model_for_cost = resolve_cost_model(config, result.model)
+    data = {
+        "cost": estimate_cost(result.events, model=model_for_cost),
+        "cumulative_tokens": compute_cumulative_tokens(result.events),
+        "tool_breakdown": compute_tool_breakdown(result.events),
+        "event_type_breakdown": compute_event_type_breakdown(result.events),
+        "total_lines": result.total_lines,
+        "model": result.model,
+    }
+    JOB_METRICS_CACHE[job_dir] = {"cache_key": cache_key, "data": data}
+    return data
+
+
+def iter_submission_roots(job_dir: str) -> List[str]:
+    """Return all submissions roots found under verifier/agent artifacts."""
+    roots: List[str] = []
+    if not os.path.isdir(job_dir):
+        return roots
+
+    try:
+        for entry in os.listdir(job_dir):
+            if not entry.startswith("harbor-task"):
+                continue
+            for sub in ["verifier", "agent"]:
+                root = os.path.join(job_dir, entry, sub, "artifacts", "submissions")
+                vlog = os.path.join(root, "version_log.json")
+                if os.path.isdir(root) and os.path.exists(vlog):
+                    roots.append(root)
+    except OSError:
+        return roots
+    return roots
+
+
+def _split_review_rebuttal(md: str) -> Tuple[str, Optional[str]]:
+    """Extract review/rebuttal markdown sections from response.md."""
+    text = md or ""
+    if not text.strip():
+        return "", None
+
+    # Normalize line endings and split on headings if present.
+    normalized = text.replace("\r\n", "\n")
+    parts = re.split(r"(?im)^\s*##\s*Rebuttal\s*$", normalized, maxsplit=1)
+    review_part = parts[0]
+    review_part = re.sub(r"(?im)^\s*##\s*Review\s*$", "", review_part, count=1).strip()
+    rebuttal_part = parts[1].strip() if len(parts) > 1 else None
+    return review_part, rebuttal_part
+
+
+def _safe_submission_dir_name(name: str) -> bool:
+    if not name or "/" in name or "\\" in name:
+        return False
+    if name in {".", ".."} or ".." in name:
+        return False
+    return True
+
+
+def build_submission_records(job_dir: str, job_id: str) -> List[dict]:
+    """Collect submission versions across all artifacts roots."""
+    records: Dict[str, dict] = {}
+
+    for root in iter_submission_roots(job_dir):
+        vlog_path = os.path.join(root, "version_log.json")
+        try:
+            with open(vlog_path) as f:
+                vlog = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            continue
+
+        for ver in vlog.get("versions", []):
+            directory = str(ver.get("directory", "")).strip()
+            if not _safe_submission_dir_name(directory):
+                continue
+            v_dir = os.path.join(root, directory)
+            review_md = ver.get("reviewer_preview", ver.get("reviewer_question_preview", "")) or ""
+            rebuttal_md = None
+
+            resp_md = os.path.join(v_dir, "reviewer_communications", "response.md")
+            resp_json = os.path.join(v_dir, "reviewer_communications", "response.json")
+
+            if os.path.exists(resp_md):
+                try:
+                    with open(resp_md) as f:
+                        review_md, rebuttal_md = _split_review_rebuttal(f.read())
+                except OSError:
+                    pass
+            elif os.path.exists(resp_json):
+                try:
+                    with open(resp_json) as f:
+                        resp = json.load(f)
+                    review_md = resp.get("question", review_md) or review_md
+                    rebuttal_md = resp.get("rebuttal")
+                except (json.JSONDecodeError, OSError):
+                    pass
+
+            has_pdf = os.path.exists(os.path.join(v_dir, "paper.pdf"))
+            has_tex = bool(ver.get("paper_tex", False) or os.path.exists(os.path.join(v_dir, "paper.tex")))
+            figures_count = 0
+            fig_dir = os.path.join(v_dir, "figures")
+            if os.path.isdir(fig_dir):
+                figures_count = len([f for f in os.listdir(fig_dir) if f.endswith(".png")])
+
+            record = {
+                "version": ver.get("version"),
+                "timestamp": ver.get("timestamp"),
+                "directory": directory,
+                "review": mask_secrets_in_text(review_md or ""),
+                "review_markdown": mask_secrets_in_text(review_md or ""),
+                "rebuttal": mask_secrets_in_text(rebuttal_md or "") if rebuttal_md else None,
+                "rebuttal_markdown": mask_secrets_in_text(rebuttal_md or "") if rebuttal_md else None,
+                "has_pdf": has_pdf,
+                "paper_url": f"/api/jobs/{job_id}/submissions/{directory}/paper" if has_pdf else None,
+                "has_tex": has_tex,
+                "has_experiments": bool(ver.get("has_experiments", False)),
+                "has_figures": bool(ver.get("has_figures", False) or figures_count > 0),
+                "figures_count": figures_count,
+                "reviewer_mode": ver.get("reviewer_mode", "api"),
+            }
+
+            prev = records.get(directory)
+            if not prev:
+                records[directory] = record
+            else:
+                prev_score = (
+                    (1 if prev.get("has_pdf") else 0)
+                    + len(prev.get("review_markdown", "") or "")
+                    + len(prev.get("rebuttal_markdown", "") or "")
+                )
+                new_score = (
+                    (1 if record.get("has_pdf") else 0)
+                    + len(record.get("review_markdown", "") or "")
+                    + len(record.get("rebuttal_markdown", "") or "")
+                )
+                if new_score >= prev_score:
+                    records[directory] = record
+
+    submissions = list(records.values())
+    # Show newest first where possible.
+    submissions.sort(
+        key=lambda r: (
+            r.get("version") if isinstance(r.get("version"), int) else -1,
+            r.get("timestamp") or "",
+        ),
+        reverse=True,
+    )
+    return submissions
+
+
 def discover_jobs() -> list:
     """Scan jobs directory and return job metadata."""
     jobs = []
     if not os.path.isdir(JOBS_DIR):
         return jobs
 
-    for name in sorted(os.listdir(JOBS_DIR), reverse=True):
+    job_entries = []
+    for name in os.listdir(JOBS_DIR):
         job_dir = os.path.join(JOBS_DIR, name)
         if not os.path.isdir(job_dir):
             continue
+        try:
+            mtime = os.path.getmtime(job_dir)
+        except OSError:
+            mtime = 0
+        job_entries.append((name, job_dir, mtime))
+    job_entries.sort(key=lambda x: x[2], reverse=True)
+
+    for idx, (name, job_dir, _) in enumerate(job_entries):
 
         config = read_config(job_dir)
         status = get_job_status(job_dir)
-        cc_path = find_claude_code_path(job_dir)
+        activity_path = find_agent_activity_path(job_dir)
 
-        # Quick line count
         line_count = 0
         file_size = 0
-        if cc_path:
-            try:
-                file_size = os.path.getsize(cc_path)
-                with open(cc_path, "r", errors="replace") as f:
-                    line_count = sum(1 for _ in f)
-            except OSError:
-                pass
-
-        # Quick token estimate from parsing (cached in practice)
-        token_summary = None
-        if cc_path:
-            result = detect_and_parse(job_dir)
-            cost = estimate_cost(result.events, model=config.get("agents", [{}])[0].get("model_name", "claude-opus-4-6"))
-            token_summary = cost
-
-        # Extract task name: try config job_name, then first assistant text
         task_name = config.get("job_name", name)
-        # Try to get a more descriptive name from early assistant messages
-        if cc_path and result.events:
-            for ev in result.events[:10]:
-                if ev.source == "agent" and ev.event_type == "text" and len(ev.summary) > 20:
-                    task_name = ev.summary[:80]
-                    break
+        token_summary = None
+        parsed_model = None
+        cache_key = _build_activity_cache_key(job_dir)
+
+        if cache_key:
+            file_size = cache_key[2]
+
+        cached = JOB_PARSE_CACHE.get(job_dir)
+        if cached and cached.get("cache_key") == cache_key:
+            line_count = cached.get("line_count", 0)
+            token_summary = cached.get("token_summary")
+            task_name = cached.get("task_name", task_name)
+            parsed_model = cached.get("parsed_model")
+        else:
+            should_parse_detail = (status == "running") or (idx < 8)
+            if should_parse_detail:
+                result = load_job_events(job_dir)
+                if result.events:
+                    metrics = get_job_metrics(job_dir, config, allow_backfill=False, parsed=result)
+                    token_summary = metrics.get("cost")
+                    line_count = result.total_lines or line_count
+                    parsed_model = result.model
+                    for ev in result.events[:10]:
+                        if ev.source in {"agent", "user"} and ev.event_type in {"text", "user_message"} and len(ev.summary) > 20:
+                            task_name = ev.summary[:80]
+                            break
+
+            if activity_path and not line_count and not activity_path.endswith("trajectory.json"):
+                # For lightweight rows, keep an approximate count from the raw file.
+                try:
+                    with open(activity_path, "r", errors="replace") as f:
+                        line_count = sum(1 for _ in f)
+                except OSError:
+                    pass
+
+            JOB_PARSE_CACHE[job_dir] = {
+                "cache_key": cache_key,
+                "line_count": line_count,
+                "token_summary": token_summary,
+                "task_name": task_name,
+                "parsed_model": parsed_model,
+            }
+
+        model_name = get_model_name(config)
+        if model_name == "unknown" and parsed_model:
+            model_name = str(parsed_model).split("/")[-1].replace("claude-", "")
 
         jobs.append({
             "id": name,
             "dir": job_dir,
             "status": status,
-            "model": get_model_name(config),
+            "model": model_name,
             "line_count": line_count,
             "file_size_mb": round(file_size / 1_000_000, 1),
             "submissions": get_submission_count(job_dir),
             "tokens": token_summary,
-            "task_name": task_name,
+            "task_name": mask_secrets_in_text(task_name),
         })
 
     return jobs
+
+
+def discover_job_meta(job_id: str) -> Optional[dict]:
+    """Load lightweight metadata for a single job detail page."""
+    job_dir = os.path.join(JOBS_DIR, job_id)
+    if not os.path.isdir(job_dir):
+        return None
+
+    config = read_config(job_dir)
+    status = get_job_status(job_dir)
+    submissions = get_submission_count(job_dir)
+    model_name = get_model_name(config)
+
+    if model_name == "unknown":
+        metrics = get_job_metrics(job_dir, config, allow_backfill=True)
+        parsed_model = metrics.get("model")
+        if parsed_model:
+            model_name = str(parsed_model).split("/")[-1].replace("claude-", "")
+
+    return {
+        "id": job_id,
+        "status": status,
+        "model": model_name,
+        "submissions": submissions,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -238,7 +642,31 @@ async def job_detail(job_id: str):
 @app.get("/api/jobs")
 async def api_jobs():
     """Return JSON list of all jobs with summary stats."""
-    return JSONResponse(discover_jobs())
+    now = time.time()
+    cached = JOBS_LIST_CACHE
+    if (
+        cached.get("jobs_dir") == JOBS_DIR
+        and cached.get("payload") is not None
+        and now < float(cached.get("expires_at", 0.0))
+    ):
+        return JSONResponse(mask_secrets(cached["payload"]))
+
+    payload = discover_jobs()
+    JOBS_LIST_CACHE.update({
+        "jobs_dir": JOBS_DIR,
+        "payload": payload,
+        "expires_at": now + JOBS_LIST_CACHE_TTL_SEC,
+    })
+    return JSONResponse(mask_secrets(payload))
+
+
+@app.get("/api/jobs/{job_id}/meta")
+async def api_job_meta(job_id: str):
+    """Return lightweight metadata for one job."""
+    meta = discover_job_meta(job_id)
+    if not meta:
+        return JSONResponse({"error": "Job not found"}, status_code=404)
+    return JSONResponse(mask_secrets(meta))
 
 
 @app.get("/api/jobs/{job_id}/events")
@@ -248,9 +676,9 @@ async def api_events(job_id: str, after: int = 0):
     if not os.path.isdir(job_dir):
         return JSONResponse({"error": "Job not found"}, status_code=404)
 
-    result = detect_and_parse(job_dir, after_line=after)
+    result = load_job_events(job_dir, after_line=after, allow_backfill=True)
     return JSONResponse({
-        "events": [e.to_dict() for e in result.events],
+        "events": mask_secrets([e.to_dict() for e in result.events]),
         "total_lines": result.total_lines,
         "session_id": result.session_id,
         "model": result.model,
@@ -259,48 +687,47 @@ async def api_events(job_id: str, after: int = 0):
 
 @app.get("/api/jobs/{job_id}/stream")
 async def stream_events(job_id: str, after: int = 0):
-    """SSE stream: polls claude-code.txt every 2 seconds, yields new events."""
+    """SSE stream: polls parsed trajectory/events every 2 seconds, yields new events."""
     job_dir = os.path.join(JOBS_DIR, job_id)
     if not os.path.isdir(job_dir):
         return JSONResponse({"error": "Job not found"}, status_code=404)
 
-    cc_path = find_claude_code_path(job_dir)
-    if not cc_path:
-        return JSONResponse({"error": "No transcript found"}, status_code=404)
+    activity_path = find_agent_activity_path(job_dir)
+    if not activity_path:
+        generate_trajectory(job_dir)
+        activity_path = find_agent_activity_path(job_dir)
+    if not activity_path:
+        return JSONResponse({"error": "No trajectory or transcript found"}, status_code=404)
 
     async def event_generator():
         last_line = after
         config = read_config(job_dir)
-        model = config.get("agents", [{}])[0].get("model_name", "claude-opus-4-6")
         tick = 0
 
         while True:
-            result = detect_and_parse(job_dir, after_line=last_line)
+            result = load_job_events(job_dir, after_line=last_line, allow_backfill=True)
             for event in result.events:
                 yield {
                     "event": "new_event",
-                    "data": json.dumps(event.to_dict()),
+                    "data": json.dumps(mask_secrets(event.to_dict())),
                 }
             if result.events:
                 last_line = result.total_lines
 
-            # Also parse full for cumulative stats
-            full_result = detect_and_parse(job_dir)
-            cost = estimate_cost(full_result.events, model=model)
-            cumulative = compute_cumulative_tokens(full_result.events)
-            tool_bk = compute_tool_breakdown(full_result.events)
-            event_bk = compute_event_type_breakdown(full_result.events)
-
-            yield {
-                "event": "metrics",
-                "data": json.dumps({
-                    "cost": cost,
-                    "cumulative_tokens": cumulative[-5:] if cumulative else [],  # last 5 for chart update
-                    "tool_breakdown": tool_bk,
-                    "event_type_breakdown": event_bk,
-                    "total_lines": full_result.total_lines,
-                }),
-            }
+            # Full metrics are expensive on large trajectories; refresh less frequently.
+            if tick == 0 or result.events or tick % 3 == 0:
+                metrics = get_job_metrics(job_dir, config, allow_backfill=True)
+                cumulative = metrics.get("cumulative_tokens") or []
+                yield {
+                    "event": "metrics",
+                    "data": json.dumps(mask_secrets({
+                        "cost": metrics.get("cost"),
+                        "cumulative_tokens": cumulative[-5:] if cumulative else [],  # last 5 for chart update
+                        "tool_breakdown": metrics.get("tool_breakdown") or [],
+                        "event_type_breakdown": metrics.get("event_type_breakdown") or [],
+                        "total_lines": metrics.get("total_lines", result.total_lines),
+                    })),
+                }
 
             # Regenerate ATIF trajectory every ~60s for running jobs
             tick += 1
@@ -320,106 +747,61 @@ async def api_tokens(job_id: str):
         return JSONResponse({"error": "Job not found"}, status_code=404)
 
     config = read_config(job_dir)
-    model = config.get("agents", [{}])[0].get("model_name", "claude-opus-4-6")
+    metrics = get_job_metrics(job_dir, config, allow_backfill=True)
 
-    result = detect_and_parse(job_dir)
-    cost = estimate_cost(result.events, model=model)
-    cumulative = compute_cumulative_tokens(result.events)
-    tool_bk = compute_tool_breakdown(result.events)
-    event_bk = compute_event_type_breakdown(result.events)
-
-    return JSONResponse({
-        "cost": cost,
-        "cumulative_tokens": cumulative,
-        "tool_breakdown": tool_bk,
-        "event_type_breakdown": event_bk,
-    })
+    return JSONResponse(mask_secrets({
+        "cost": metrics.get("cost"),
+        "cumulative_tokens": metrics.get("cumulative_tokens") or [],
+        "tool_breakdown": metrics.get("tool_breakdown") or [],
+        "event_type_breakdown": metrics.get("event_type_breakdown") or [],
+    }))
 
 
-@app.get("/api/jobs/{job_id}/submissions")
-async def api_submissions(job_id: str):
-    """Read version_log.json + each version's reviewer feedback (response.md or response.json)."""
+@app.get("/api/jobs/{job_id}/idea")
+async def api_job_idea(job_id: str):
+    """Return original idea JSON matched by job stem."""
     job_dir = os.path.join(JOBS_DIR, job_id)
     if not os.path.isdir(job_dir):
         return JSONResponse({"error": "Job not found"}, status_code=404)
 
-    # Find artifacts in both agent and verifier
-    submissions = []
-    for entry in os.listdir(job_dir):
-        if not entry.startswith("harbor-task"):
-            continue
-        for sub in ["verifier", "agent"]:
-            sub_dir = os.path.join(job_dir, entry, sub, "artifacts", "submissions")
-            if not os.path.isdir(sub_dir):
-                continue
+    config = read_config(job_dir)
+    return JSONResponse(load_idea_payload(job_id, config, job_dir=job_dir))
 
-            vlog_path = os.path.join(sub_dir, "version_log.json")
-            if not os.path.exists(vlog_path):
-                continue
 
-            try:
-                with open(vlog_path) as f:
-                    vlog = json.load(f)
-            except (json.JSONDecodeError, OSError):
-                continue
+@app.get("/api/jobs/{job_id}/submissions")
+async def api_submissions(job_id: str):
+    """Read submission versions with markdown review/rebuttal and paper links."""
+    job_dir = os.path.join(JOBS_DIR, job_id)
+    if not os.path.isdir(job_dir):
+        return JSONResponse({"error": "Job not found"}, status_code=404)
 
-            for ver in vlog.get("versions", []):
-                v_dir = os.path.join(sub_dir, ver["directory"])
-                review = ver.get("reviewer_preview", ver.get("reviewer_question_preview", ""))
-                rebuttal = None
-
-                # Try response.md first (new format), then response.json (legacy)
-                resp_md = os.path.join(v_dir, "reviewer_communications", "response.md")
-                resp_json = os.path.join(v_dir, "reviewer_communications", "response.json")
-
-                if os.path.exists(resp_md):
-                    try:
-                        with open(resp_md) as f:
-                            text = f.read()
-                        # Split on ## Review / ## Rebuttal sections
-                        parts = text.split("## Rebuttal", 1)
-                        review_part = parts[0]
-                        # Strip the ## Review header
-                        review = review_part.replace("## Review", "", 1).strip()
-                        if len(parts) > 1:
-                            rebuttal = parts[1].strip()
-                    except OSError:
-                        pass
-                elif os.path.exists(resp_json):
-                    try:
-                        with open(resp_json) as f:
-                            resp = json.load(f)
-                        review = resp.get("question", review)
-                        rebuttal = resp.get("rebuttal")
-                    except (json.JSONDecodeError, OSError):
-                        pass
-
-                has_pdf = os.path.exists(os.path.join(v_dir, "paper.pdf"))
-                figures_count = 0
-                fig_dir = os.path.join(v_dir, "figures")
-                if os.path.isdir(fig_dir):
-                    figures_count = len([f for f in os.listdir(fig_dir) if f.endswith(".png")])
-
-                submissions.append({
-                    "version": ver.get("version"),
-                    "timestamp": ver.get("timestamp"),
-                    "review": review,
-                    "rebuttal": rebuttal,
-                    "has_pdf": has_pdf,
-                    "has_tex": ver.get("paper_tex", False),
-                    "has_experiments": ver.get("has_experiments", False),
-                    "has_figures": ver.get("has_figures", False),
-                    "figures_count": figures_count,
-                    "reviewer_mode": ver.get("reviewer_mode", "api"),
-                })
-
-            # Found submissions, stop looking
-            if submissions:
-                break
-        if submissions:
-            break
-
+    submissions = build_submission_records(job_dir, job_id)
     return JSONResponse({"submissions": submissions, "total": len(submissions)})
+
+
+@app.get("/api/jobs/{job_id}/submissions/{submission_dir}/paper")
+async def api_submission_pdf(job_id: str, submission_dir: str):
+    """Serve paper.pdf for a specific submission version directory."""
+    job_dir = os.path.join(JOBS_DIR, job_id)
+    if not os.path.isdir(job_dir):
+        return JSONResponse({"error": "Job not found"}, status_code=404)
+    if not _safe_submission_dir_name(submission_dir):
+        return JSONResponse({"error": "Invalid submission directory"}, status_code=400)
+
+    for root in iter_submission_roots(job_dir):
+        pdf_path = os.path.join(root, submission_dir, "paper.pdf")
+        if os.path.exists(pdf_path):
+            return FileResponse(
+                pdf_path,
+                media_type="application/pdf",
+                filename="paper.pdf",
+                content_disposition_type="inline",
+                headers={
+                    "Cache-Control": "no-store",
+                    "X-Content-Type-Options": "nosniff",
+                },
+            )
+    return JSONResponse({"error": "PDF not found"}, status_code=404)
 
 
 @app.get("/api/jobs/{job_id}/artifacts")
@@ -443,7 +825,7 @@ async def api_artifacts(job_id: str):
     if os.path.isdir(latex_dir):
         papers = [f for f in os.listdir(latex_dir) if f.endswith((".tex", ".pdf"))]
 
-    return JSONResponse({"figures": figures, "papers": papers})
+    return JSONResponse(mask_secrets({"figures": figures, "papers": papers}))
 
 
 @app.get("/api/jobs/{job_id}/trajectory")
@@ -453,11 +835,12 @@ async def api_trajectory(job_id: str, regenerate: bool = False):
     if not os.path.isdir(job_dir):
         return JSONResponse({"error": "Job not found"}, status_code=404)
 
-    agent_dir = find_agent_dir(job_dir)
-    if not agent_dir:
-        return JSONResponse({"error": "No agent directory"}, status_code=404)
-
-    traj_path = os.path.join(agent_dir, "trajectory.json")
+    traj_path = find_trajectory_path(job_dir)
+    if not traj_path:
+        agent_dir = find_agent_dir(job_dir)
+        if not agent_dir:
+            return JSONResponse({"error": "No agent directory"}, status_code=404)
+        traj_path = os.path.join(agent_dir, "trajectory.json")
 
     # Generate if missing, stale, or forced
     need_gen = regenerate or not os.path.exists(traj_path)
@@ -472,6 +855,7 @@ async def api_trajectory(job_id: str, regenerate: bool = False):
 
     if need_gen:
         generate_trajectory(job_dir)
+        traj_path = find_trajectory_path(job_dir) or traj_path
 
     if not os.path.exists(traj_path):
         return JSONResponse({"error": "No trajectory available"}, status_code=404)
@@ -479,7 +863,7 @@ async def api_trajectory(job_id: str, regenerate: bool = False):
     try:
         with open(traj_path) as f:
             data = json.load(f)
-        return JSONResponse(data)
+        return JSONResponse(mask_secrets(data))
     except (json.JSONDecodeError, OSError) as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 

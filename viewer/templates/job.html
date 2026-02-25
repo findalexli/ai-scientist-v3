@@ -4,162 +4,299 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Job Detail — AI Scientist v3</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.1.7/dist/purify.min.js"></script>
 <style>
 :root {
-  --bg: #090c10;
-  --surface: #10141a;
-  --surface2: #1c2128;
-  --border: #30363d;
-  --text: #e6edf3;
-  --text-dim: #8b949e;
-  --accent: #58a6ff;
-  --green: #3fb950;
-  --yellow: #d29922;
-  --red: #f85149;
-  --purple: #bc8cff;
-  --pink: #f778ba;
-  --orange: #d18616;
-  --cyan: #39d2c0;
+  --bg0: #070b0f;
+  --bg1: #0d1420;
+  --bg2: #101c2b;
+  --surface: #121b2a;
+  --surface2: #1a2638;
+  --surface3: #22344a;
+  --border: #2f4761;
+  --text: #edf4ff;
+  --text-dim: #9eb3cb;
+  --accent: #35c2ff;
+  --accent-2: #4ce0b3;
+  --warm: #ffbf69;
+  --danger: #ff7e7e;
 }
-* { margin: 0; padding: 0; box-sizing: border-box; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-  background: var(--bg);
+  font-family: 'Manrope', sans-serif;
   color: var(--text);
-  line-height: 1.6;
-  font-size: 14px;
+  background:
+    radial-gradient(1200px 500px at 0% -10%, rgba(53,194,255,0.2), transparent 60%),
+    radial-gradient(900px 480px at 100% 0%, rgba(76,224,179,0.14), transparent 60%),
+    linear-gradient(180deg, var(--bg1), var(--bg0));
+  min-height: 100vh;
+  line-height: 1.55;
 }
 
-/* Header */
+.page {
+  max-width: 1520px;
+  margin: 0 auto;
+  padding: 18px 18px 36px;
+}
+
 .header {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  padding: 16px 24px;
   display: flex;
   align-items: center;
-  gap: 20px;
-  flex-wrap: wrap;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  position: relative;
-  z-index: 20;
+  gap: 16px;
+  padding: 14px 18px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(18,27,42,0.95), rgba(18,27,42,0.76));
+  backdrop-filter: blur(6px);
+  box-shadow: 0 14px 40px rgba(0,0,0,0.35);
 }
-.header a { color: var(--accent); text-decoration: none; font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 4px; transition: color 0.2s; }
-.header a:hover { color: #fff; text-decoration: none; }
-.header h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.2px; }
+.header a {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+.header h1 {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
 .header-stats {
-  display: flex;
-  gap: 24px;
   margin-left: auto;
+  display: flex;
+  gap: 20px;
   align-items: center;
 }
 .stat {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  font-size: 12px;
-  color: var(--text-dim);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
 }
 .stat .val {
+  font-family: 'JetBrains Mono', monospace;
   font-size: 18px;
-  font-weight: 700;
+  font-weight: 600;
+  letter-spacing: -0.02em;
   color: var(--text);
-  font-family: 'SF Mono', SFMono-Regular, Consolas, monospace;
-  line-height: 1.2;
 }
-.stat .val.cost { color: var(--yellow); }
-.status-badge {
-  padding: 3px 10px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 500;
+.stat .val.cost { color: var(--warm); }
+
+.status-badge, .model-badge {
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
-.status-badge.running { background: rgba(63,185,80,0.2); color: var(--green); }
-.status-badge.completed { background: rgba(139,148,158,0.2); color: var(--text-dim); }
-.status-badge.idle { background: rgba(210,153,34,0.2); color: var(--yellow); }
-.model-badge {
-  background: rgba(188,140,255,0.15);
-  color: var(--purple);
-  padding: 3px 10px;
-  border-radius: 12px;
+.status-badge.running { color: #66f0a2; background: rgba(76,224,179,0.18); }
+.status-badge.completed { color: #bcd0e5; background: rgba(158,179,203,0.18); }
+.status-badge.idle { color: var(--warm); background: rgba(255,191,105,0.18); }
+.status-badge.unknown { color: #c6d2df; background: rgba(158,179,203,0.1); }
+.model-badge { background: rgba(53,194,255,0.16); color: var(--accent); }
+
+.tab-switcher {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+}
+.help-strip {
+  margin-top: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-dim);
   font-size: 12px;
+  background: rgba(26,38,56,0.5);
+}
+.tab-btn {
+  border: 1px solid var(--border);
+  background: rgba(30,48,70,0.54);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+.tab-btn.active {
+  background: rgba(53,194,255,0.24);
+  color: #fff;
+  border-color: var(--accent);
 }
 
-/* Main layout */
-.layout {
+.tab-panel {
+  margin-top: 14px;
+  display: none;
+}
+.tab-panel.active { display: block; }
+
+.idea-card {
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.idea-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.idea-meta {
+  margin-top: 3px;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  word-break: break-word;
+}
+.idea-content {
+  max-height: 290px;
+  overflow: auto;
+  padding: 10px 12px;
+  background: rgba(8,13,20,0.62);
+}
+.idea-json {
+  margin: 0;
+  color: #dbe9fb;
+  font-size: 12px;
+  line-height: 1.5;
+  font-family: 'JetBrains Mono', monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.idea-doc {
   display: grid;
-  grid-template-columns: 1fr 400px;
-  gap: 0;
-  height: calc(100vh - 60px);
+  gap: 10px;
+}
+.idea-field {
+  border: 1px solid rgba(47,71,97,0.85);
+  border-radius: 8px;
+  background: rgba(16,27,43,0.62);
+  overflow: hidden;
+}
+.idea-key {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent-2);
+  padding: 7px 10px;
+  border-bottom: 1px solid rgba(47,71,97,0.75);
+  background: rgba(18,30,47,0.82);
+}
+.idea-val {
+  padding: 8px 10px;
+}
+.idea-obj {
+  display: grid;
+  gap: 8px;
+}
+.idea-array {
+  display: grid;
+  gap: 8px;
+}
+.idea-arr-item {
+  border: 1px solid rgba(47,71,97,0.68);
+  border-radius: 7px;
+  padding: 7px 8px;
+  background: rgba(12,20,32,0.58);
+}
+.idea-arr-label {
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.idea-str {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  color: var(--text);
+}
+.idea-primitive {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: #dbe9fb;
+}
+.idea-empty {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-style: italic;
 }
 
-/* Timeline panel */
-.timeline-panel {
-  overflow-y: auto;
-  padding: 12px 16px;
-  border-right: 1px solid var(--border);
+.main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 390px;
+  gap: 14px;
+  align-items: start;
+}
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(18,27,42,0.92), rgba(17,26,40,0.72));
+  box-shadow: 0 10px 30px rgba(0,0,0,0.28);
+}
+
+.timeline-card { min-height: 72vh; }
+.timeline-top {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
 }
 .timeline-filters {
   display: flex;
-  gap: 6px;
   flex-wrap: wrap;
-  margin-bottom: 12px;
-  position: sticky;
-  top: 0;
-  background: var(--bg);
-  padding: 6px 0;
-  z-index: 10;
+  gap: 8px;
 }
 .tf-btn {
-  background: var(--surface);
   border: 1px solid var(--border);
+  background: rgba(30,48,70,0.54);
   color: var(--text-dim);
-  padding: 3px 10px;
-  border-radius: 4px;
-  cursor: pointer;
   font-size: 11px;
-  transition: all 0.15s;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  border-radius: 999px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
-.tf-btn:hover { border-color: var(--accent); }
-.tf-btn.active { opacity: 1; color: #fff; }
-.tf-btn.off { opacity: 0.4; }
+.tf-btn:hover { border-color: var(--accent); color: #fff; }
+.tf-btn.active { box-shadow: 0 0 0 1px rgba(255,255,255,0.06) inset; }
 
-/* Event colors */
-.ev-literature_review { border-left-color: var(--purple) !important; }
-.ev-submission { border-left-color: var(--pink) !important; }
-.ev-experiment { border-left-color: var(--green) !important; }
-.ev-paper_write { border-left-color: var(--accent) !important; }
-.ev-plotting { border-left-color: var(--cyan) !important; }
-.ev-git_clone { border-left-color: var(--orange) !important; }
-.ev-pip_install { border-left-color: var(--orange) !important; }
-.ev-file_read { border-left-color: #484f58 !important; }
-.ev-file_write { border-left-color: #484f58 !important; }
-.ev-bash { border-left-color: var(--text-dim) !important; }
-.ev-web { border-left-color: var(--yellow) !important; }
-.ev-subagent { border-left-color: var(--pink) !important; }
-.ev-thinking { border-left-color: #484f58 !important; }
-.ev-text { border-left-color: var(--text-dim) !important; }
-.ev-tool_result { border-left-color: #21262d !important; }
-.ev-system { border-left-color: var(--accent) !important; }
-.ev-task_mgmt { border-left-color: var(--text-dim) !important; }
-.ev-other { border-left-color: var(--border) !important; }
-.ev-user_message { border-left-color: var(--yellow) !important; }
+.timeline-panel {
+  max-height: 72vh;
+  overflow: auto;
+  padding: 12px;
+}
 
 .event {
+  border: 1px solid var(--border);
   border-left: 3px solid var(--border);
-  padding: 6px 12px;
-  margin-bottom: 4px;
-  border-radius: 0 4px 4px 0;
-  background: var(--surface);
+  border-radius: 10px;
+  background: rgba(20,31,48,0.88);
+  padding: 8px 10px;
+  margin-bottom: 7px;
   cursor: pointer;
-  transition: background 0.1s, box-shadow 0.1s;
+  transition: background 0.12s ease, border-color 0.12s ease;
 }
-.event:hover { background: var(--surface2); }
-.event.highlight-tool {
-  background: var(--surface2);
-  box-shadow: 0 0 0 1px var(--text-dim) inset;
+.event:hover { background: rgba(28,42,63,0.96); }
+.event.selected {
+  border-color: rgba(53,194,255,0.7);
+  box-shadow: 0 0 0 1px rgba(53,194,255,0.22) inset;
 }
 .event-header {
   display: flex;
@@ -167,21 +304,21 @@ body {
   gap: 8px;
 }
 .event-step {
+  min-width: 36px;
   font-size: 10px;
   color: var(--text-dim);
-  font-family: 'SF Mono', SFMono-Regular, Consolas, monospace;
-  min-width: 30px;
+  font-family: 'JetBrains Mono', monospace;
 }
 .event-type-tag {
   font-size: 10px;
-  padding: 1px 6px;
-  border-radius: 3px;
-  font-weight: 500;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
+  border-radius: 999px;
+  padding: 2px 8px;
 }
 .event-summary {
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--text);
   flex: 1;
   overflow: hidden;
@@ -189,199 +326,422 @@ body {
   white-space: nowrap;
 }
 .event-tokens {
-  font-size: 10px;
   color: var(--text-dim);
-  font-family: 'SF Mono', SFMono-Regular, Consolas, monospace;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
 }
 .event-detail {
-  display: none;
-  margin-top: 8px;
+  margin-top: 7px;
   padding: 8px;
-  background: var(--bg);
-  border-radius: 4px;
-  font-size: 12px;
-  font-family: 'SF Mono', SFMono-Regular, Consolas, monospace;
+  border-radius: 8px;
+  border: 1px solid rgba(53,194,255,0.2);
+  background: rgba(8,13,20,0.62);
+  color: #bbd0e8;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
   white-space: pre-wrap;
-  word-break: break-all;
-  color: var(--text-dim);
-  max-height: 300px;
-  overflow-y: auto;
+  word-break: break-word;
+  display: none;
+  max-height: 260px;
+  overflow: auto;
 }
 .event.expanded .event-detail { display: block; }
 
-/* Right panels */
-.right-panels {
-  overflow-y: auto;
+.ev-literature_review { border-left-color: #9e8dff !important; }
+.ev-submission { border-left-color: #ff6f91 !important; }
+.ev-experiment { border-left-color: #4ce0b3 !important; }
+.ev-paper_write { border-left-color: #35c2ff !important; }
+.ev-plotting { border-left-color: #5de0ff !important; }
+.ev-git_clone, .ev-pip_install { border-left-color: #ffbf69 !important; }
+.ev-bash, .ev-file_read, .ev-file_write, .ev-text, .ev-thinking, .ev-task_mgmt { border-left-color: #6f859f !important; }
+.ev-web, .ev-user_message { border-left-color: var(--warm) !important; }
+.ev-tool_result { border-left-color: #466584 !important; }
+.ev-system { border-left-color: var(--accent) !important; }
+.ev-subagent { border-left-color: #ff9f87 !important; }
+
+.side {
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 10px;
 }
 .panel {
-  border-bottom: 1px solid var(--border);
-  padding: 14px 16px;
+  padding: 12px;
 }
 .panel-title {
   font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
   color: var(--text-dim);
-  margin-bottom: 10px;
-  font-weight: 600;
-}
-
-/* Token chart */
-.chart-container {
-  position: relative;
-  height: 200px;
-}
-
-/* Submissions */
-.submission-card {
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 10px 12px;
   margin-bottom: 8px;
 }
-.sub-header {
+.chart-container { position: relative; height: 190px; }
+.donut-container { position: relative; height: 170px; }
+
+.tool-table { width: 100%; font-size: 12px; }
+.tool-table td { padding: 2px 4px; }
+.tool-table td:nth-child(2), .tool-table td:nth-child(3) {
+  text-align: right;
+  color: var(--text-dim);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.submissions-layout {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.submissions-nav {
+  padding: 12px;
+  max-height: 76vh;
+  overflow: auto;
+}
+.sub-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.sub-nav-item {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(17,28,43,0.72);
+  color: var(--text);
+  width: 100%;
+  text-align: left;
+  padding: 9px 10px;
+  cursor: pointer;
+}
+.sub-nav-item:hover { border-color: rgba(53,194,255,0.5); }
+.sub-nav-item.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(53,194,255,0.25) inset;
+  background: rgba(30,48,70,0.76);
+}
+.sub-nav-top {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 6px;
 }
-.sub-version {
-  background: rgba(63,185,80,0.2);
-  color: var(--green);
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 600;
+.sub-nav-version {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--accent-2);
 }
-.sub-time { font-size: 11px; color: var(--text-dim); }
-.sub-review {
-  font-size: 12px;
+.sub-nav-time {
+  font-size: 11px;
   color: var(--text-dim);
-  max-height: 60px;
-  overflow: hidden;
-  cursor: pointer;
-  transition: max-height 0.3s;
-  line-height: 1.4;
-  white-space: pre-wrap;
-}
-.sub-review.expanded { max-height: none; overflow: auto; }
-.sub-rebuttal {
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid var(--border);
-  font-size: 12px;
-  color: var(--cyan);
-  max-height: 60px;
-  overflow: hidden;
-  cursor: pointer;
-  white-space: pre-wrap;
-}
-.sub-rebuttal.expanded { max-height: none; overflow: auto; }
-.sub-rebuttal::before { content: "Rebuttal: "; font-weight: 600; }
-.sub-mode {
-  font-size: 10px;
-  padding: 1px 5px;
-  border-radius: 3px;
-  background: rgba(136,98,226,0.2);
-  color: var(--purple, #b392f0);
-}
-.sub-badges { display: flex; gap: 4px; margin-top: 4px; }
-.sub-badge {
-  font-size: 10px;
-  padding: 1px 5px;
-  border-radius: 3px;
-  background: rgba(139,148,158,0.15);
-  color: var(--text-dim);
-}
-
-/* Tool breakdown */
-.tool-table {
-  width: 100%;
-  font-size: 12px;
-}
-.tool-table td { padding: 3px 8px; }
-.tool-table td:first-child { color: var(--text); }
-.tool-table td:nth-child(2) { text-align: right; color: var(--text-dim); font-family: monospace; }
-.tool-table td:nth-child(3) { text-align: right; color: var(--text-dim); font-family: monospace; width: 50px; }
-.tool-bar {
-  height: 4px;
-  background: var(--accent);
-  border-radius: 2px;
   margin-top: 2px;
 }
 
-/* Donut chart */
-.donut-container {
-  position: relative;
-  height: 160px;
+.submission-dossier {
+  padding: 14px;
+  min-height: 76vh;
+}
+.dossier-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 10px;
 }
+.dossier-title {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.dossier-title-sub {
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
 
-.no-data { color: var(--text-dim); font-size: 13px; text-align: center; padding: 20px; }
+.submission-entry {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(17,28,43,0.72);
+  overflow: hidden;
+}
+.entry-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(26,38,56,0.65);
+}
+.sub-version {
+  background: rgba(76,224,179,0.2);
+  color: var(--accent-2);
+  font-size: 11px;
+  font-weight: 800;
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+.sub-time {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.sub-mode {
+  margin-left: auto;
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(53,194,255,0.2);
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+.submission-body {
+  padding: 12px;
+  display: grid;
+  gap: 12px;
+}
+.paper-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pdf-btn {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(53,194,255,0.16);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.pdf-btn:hover { border-color: var(--accent); }
+.pdf-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 600;
+}
+.pdf-link:hover { text-decoration: underline; }
+.paper-wrap {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(8,13,20,0.68);
+}
+.paper-wrap iframe {
+  border: 0;
+  width: 100%;
+  min-height: 420px;
+  background: #fff;
+}
+.paper-empty {
+  padding: 16px;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.pdfjs-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(18,27,42,0.82);
+}
+.pdfjs-status {
+  color: var(--text-dim);
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.pdfjs-spacer { flex: 1; }
+.pdfjs-canvas-wrap {
+  padding: 10px;
+  display: flex;
+  justify-content: center;
+  overflow: auto;
+}
+.pdfjs-canvas {
+  max-width: 100%;
+  height: auto;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.34);
+  background: #fff;
+}
+.pdf-fallback-note {
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.md-section {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(8,13,20,0.55);
+  padding: 10px;
+}
+.md-section h4 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+.md-content {
+  font-size: 13px;
+  color: var(--text);
+}
+.md-content p { margin: 0 0 8px; }
+.md-content p:last-child { margin-bottom: 0; }
+.md-content pre {
+  background: rgba(7,11,15,0.85);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  overflow: auto;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.md-content code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+.md-content a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.md-content ul, .md-content ol {
+  margin: 0 0 8px 18px;
+}
+.md-empty {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.sub-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+.sub-badge {
+  font-size: 10px;
+  border-radius: 999px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+.no-data {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-dim);
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #385470; border-radius: 999px; }
+
+@media (max-width: 1100px) {
+  .submissions-layout { grid-template-columns: 1fr; }
+  .submissions-nav { max-height: none; }
+  .main { grid-template-columns: 1fr; }
+  .timeline-card { min-height: 54vh; }
+  .timeline-panel { max-height: 54vh; }
+}
+
+@media (max-width: 760px) {
+  .header {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px;
+  }
+  .header-stats {
+    margin-left: 0;
+    width: 100%;
+    justify-content: space-between;
+  }
+  .stat { align-items: flex-start; }
+  .stat .val { font-size: 16px; }
+  .paper-wrap iframe { min-height: 340px; }
+}
 </style>
 </head>
 <body>
-
-<div class="header">
-  <a href="/">&larr; All Jobs</a>
-  <h1 id="job-title">{{JOB_ID}}</h1>
-  <span class="status-badge" id="status-badge">...</span>
-  <span class="model-badge" id="model-badge">...</span>
-  <div class="header-stats">
-    <div class="stat"><span class="val" id="stat-events">-</span>events</div>
-    <div class="stat"><span class="val" id="stat-tokens">-</span>tokens</div>
-    <div class="stat"><span class="val cost" id="stat-cost">-</span>est. cost</div>
-    <div class="stat"><span class="val" id="stat-subs">-</span>submissions</div>
-  </div>
-</div>
-
-<div class="layout">
-  <!-- Timeline -->
-  <div class="timeline-panel" id="timeline-panel">
-    <div class="timeline-filters" id="timeline-filters"></div>
-    <div id="timeline"></div>
+<div class="page">
+  <div class="header">
+    <a href="/">&larr; All Jobs</a>
+    <h1 id="job-title">{{JOB_ID}}</h1>
+    <span class="status-badge" id="status-badge">...</span>
+    <span class="model-badge" id="model-badge">...</span>
+    <div class="header-stats">
+      <div class="stat"><span class="val" id="stat-events">-</span>events</div>
+      <div class="stat"><span class="val" id="stat-tokens">-</span>tokens</div>
+      <div class="stat"><span class="val cost" id="stat-cost">-</span>est. cost</div>
+      <div class="stat"><span class="val" id="stat-subs">-</span>submissions</div>
+    </div>
   </div>
 
-  <!-- Right panels -->
-  <div class="right-panels">
-    <!-- Token chart -->
-    <div class="panel">
-      <div class="panel-title">Cumulative Token Usage</div>
-      <div class="chart-container">
-        <canvas id="token-chart"></canvas>
+  <div class="tab-switcher">
+    <button class="tab-btn active" data-tab="submissions">Submissions</button>
+    <button class="tab-btn" data-tab="trajectory">Trajectory</button>
+  </div>
+  <div class="help-strip">Job: one full run. Trajectory: chronological agent actions. Submission: a saved paper version with review and rebuttal.</div>
+
+  <div class="tab-panel" id="tab-trajectory">
+    <div class="card idea-card">
+      <div class="idea-head">
+        <div>
+          <div class="panel-title">Model Input — Original Idea JSON</div>
+          <div class="idea-meta" id="idea-meta">Resolving idea source…</div>
+        </div>
+        <button class="pdf-btn" id="idea-view-toggle" style="display:none;">Show Raw JSON</button>
+      </div>
+      <div class="idea-content" id="idea-content">
+        <div class="no-data">Loading idea input…</div>
       </div>
     </div>
 
-    <!-- Submissions -->
-    <div class="panel">
-      <div class="panel-title">Submissions &amp; Reviews</div>
-      <div id="submissions-list"><div class="no-data">Loading...</div></div>
-    </div>
-
-    <!-- Tool breakdown -->
-    <div class="panel">
-      <div class="panel-title">Tool Breakdown</div>
-      <div class="donut-container">
-        <canvas id="tool-chart"></canvas>
+    <div class="main">
+      <div class="card timeline-card">
+        <div class="timeline-top">
+          <div class="timeline-filters" id="timeline-filters"></div>
+        </div>
+        <div class="timeline-panel" id="timeline-panel">
+          <div id="timeline"></div>
+        </div>
       </div>
-      <table class="tool-table" id="tool-table"></table>
-    </div>
 
-    <!-- Event type breakdown -->
-    <div class="panel">
-      <div class="panel-title">Activity Breakdown</div>
-      <div class="donut-container">
-        <canvas id="activity-chart"></canvas>
+      <div class="side">
+        <div class="card panel">
+          <div class="panel-title">Cumulative Token Usage</div>
+          <div class="chart-container"><canvas id="token-chart"></canvas></div>
+        </div>
+
+        <div class="card panel">
+          <div class="panel-title">Tool Breakdown</div>
+          <div class="donut-container"><canvas id="tool-chart"></canvas></div>
+          <table class="tool-table" id="tool-table"></table>
+        </div>
+
+        <div class="card panel">
+          <div class="panel-title">Activity Breakdown</div>
+          <div class="donut-container"><canvas id="activity-chart"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-panel active" id="tab-submissions">
+    <div class="submissions-layout">
+      <div class="card submissions-nav">
+        <div class="panel-title">Submission Versions</div>
+        <div id="submissions-list-nav"><div class="no-data">Loading submissions...</div></div>
+      </div>
+      <div class="card submission-dossier">
+        <div class="dossier-head">
+          <div>
+            <div class="dossier-title">Submission Dossier</div>
+            <div class="dossier-title-sub" id="dossier-meta">Select a submission version.</div>
+          </div>
+        </div>
+        <div id="submissions-dossier"><div class="no-data">Select a submission from the left.</div></div>
       </div>
     </div>
   </div>
@@ -397,27 +757,39 @@ let toolChart = null;
 let activityChart = null;
 let isLive = false;
 let evtSource = null;
+let selectedEvent = null;
+let tokenRefreshTimer = null;
+let submissionsCache = [];
+let submissionsLoaded = false;
+let selectedSubmissionIdx = -1;
+let activeTab = 'submissions';
+let ideaRawText = '';
+let ideaPrettyHtml = '';
+let ideaCanToggle = false;
+let ideaViewMode = 'pretty';
+let pdfJsLoadPromise = null;
 
-// Event type config
+const PDFJS_SRC = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js';
+
 const EVENT_TYPES = {
-  literature_review: { label: 'Literature', color: '#bc8cff' },
-  submission: { label: 'Submission', color: '#f778ba' },
-  experiment: { label: 'Experiment', color: '#3fb950' },
-  paper_write: { label: 'Paper', color: '#58a6ff' },
-  plotting: { label: 'Plotting', color: '#39d2c0' },
-  git_clone: { label: 'Git', color: '#d18616' },
-  pip_install: { label: 'Install', color: '#d18616' },
-  bash: { label: 'Bash', color: '#8b949e' },
-  web: { label: 'Web', color: '#d29922' },
-  file_read: { label: 'Read', color: '#484f58' },
-  file_write: { label: 'Write', color: '#484f58' },
-  subagent: { label: 'Subagent', color: '#f778ba' },
-  thinking: { label: 'Thinking', color: '#484f58' },
-  text: { label: 'Text', color: '#8b949e' },
-  tool_result: { label: 'Result', color: '#21262d' },
-  task_mgmt: { label: 'TaskMgmt', color: '#8b949e' },
-  system: { label: 'System', color: '#58a6ff' },
-  user_message: { label: 'User', color: '#d29922' },
+  literature_review: { label: 'Literature', color: '#9e8dff' },
+  submission: { label: 'Submission', color: '#ff6f91' },
+  experiment: { label: 'Experiment', color: '#4ce0b3' },
+  paper_write: { label: 'Paper', color: '#35c2ff' },
+  plotting: { label: 'Plotting', color: '#5de0ff' },
+  git_clone: { label: 'Git', color: '#ffbf69' },
+  pip_install: { label: 'Install', color: '#ffbf69' },
+  bash: { label: 'Bash', color: '#6f859f' },
+  web: { label: 'Web', color: '#ffbf69' },
+  file_read: { label: 'Read', color: '#6f859f' },
+  file_write: { label: 'Write', color: '#6f859f' },
+  subagent: { label: 'Subagent', color: '#ff9f87' },
+  thinking: { label: 'Thinking', color: '#6f859f' },
+  text: { label: 'Text', color: '#6f859f' },
+  tool_result: { label: 'Result', color: '#466584' },
+  task_mgmt: { label: 'TaskMgmt', color: '#6f859f' },
+  system: { label: 'System', color: '#35c2ff' },
+  user_message: { label: 'User', color: '#ffbf69' },
   other: { label: 'Other', color: '#30363d' },
 };
 
@@ -428,7 +800,256 @@ function formatTokens(n) {
   return String(n);
 }
 
-// ── Timeline ──
+function formatTimestamp(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return ts;
+  return d.toLocaleString();
+}
+
+function escHtml(s) {
+  if (!s) return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderMarkdown(text) {
+  if (!text || !text.trim()) return '<p class="md-empty">No content provided.</p>';
+  let html = '';
+  if (window.marked) {
+    html = marked.parse(text, { breaks: true, gfm: true, mangle: false, headerIds: false });
+  } else {
+    html = escHtml(text).replace(/\n/g, '<br>');
+  }
+  if (window.DOMPurify) {
+    html = DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+  }
+  return html;
+}
+
+function renderIdeaNode(value, depth = 0) {
+  if (value === null) return '<div class="idea-empty">null</div>';
+
+  const t = typeof value;
+  if (t === 'string') {
+    return `<div class="idea-str">${escHtml(value)}</div>`;
+  }
+  if (t === 'number' || t === 'boolean') {
+    return `<div class="idea-primitive">${escHtml(String(value))}</div>`;
+  }
+  if (Array.isArray(value)) {
+    if (!value.length) return '<div class="idea-empty">[]</div>';
+    return `
+      <div class="idea-array">
+        ${value.map((item, idx) => `
+          <div class="idea-arr-item">
+            <div class="idea-arr-label">Item ${idx + 1}</div>
+            ${renderIdeaNode(item, depth + 1)}
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+  if (t === 'object') {
+    const entries = Object.entries(value);
+    if (!entries.length) return '<div class="idea-empty">{}</div>';
+    return `
+      <div class="idea-obj">
+        ${entries.map(([k, v]) => `
+          <div class="idea-field">
+            <div class="idea-key">${escHtml(k)}</div>
+            <div class="idea-val">${renderIdeaNode(v, depth + 1)}</div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+  return `<div class="idea-primitive">${escHtml(String(value))}</div>`;
+}
+
+function updateIdeaView() {
+  const content = document.getElementById('idea-content');
+  const toggle = document.getElementById('idea-view-toggle');
+  if (!content || !toggle) return;
+
+  if (!ideaCanToggle) {
+    toggle.style.display = 'none';
+    content.innerHTML = `<pre class="idea-json">${escHtml(ideaRawText || '')}</pre>`;
+    return;
+  }
+
+  toggle.style.display = '';
+  if (ideaViewMode === 'raw') {
+    toggle.textContent = 'Show Document View';
+    content.innerHTML = `<pre class="idea-json">${escHtml(ideaRawText || '')}</pre>`;
+  } else {
+    toggle.textContent = 'Show Raw JSON';
+    content.innerHTML = `<div class="idea-doc">${ideaPrettyHtml}</div>`;
+  }
+}
+
+function initPdfJs() {
+  if (window.pdfjsLib && window.pdfjsLib.GlobalWorkerOptions) {
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+  }
+}
+
+async function ensurePdfJs() {
+  if (window.pdfjsLib && window.pdfjsLib.getDocument) {
+    initPdfJs();
+    return true;
+  }
+  if (pdfJsLoadPromise) return pdfJsLoadPromise;
+
+  pdfJsLoadPromise = new Promise(resolve => {
+    const script = document.createElement('script');
+    script.src = PDFJS_SRC;
+    script.async = true;
+    script.onload = () => {
+      initPdfJs();
+      resolve(true);
+    };
+    script.onerror = () => resolve(false);
+    document.head.appendChild(script);
+  });
+
+  return pdfJsLoadPromise;
+}
+
+async function renderPdfWithPdfJs(url, container) {
+  if (!window.pdfjsLib || !window.pdfjsLib.getDocument) return false;
+
+  container.innerHTML = `
+    <div class="pdfjs-toolbar">
+      <button class="pdf-btn" id="pdf-prev-btn">Prev</button>
+      <span class="pdfjs-status" id="pdf-page-status">Loading PDF…</span>
+      <button class="pdf-btn" id="pdf-next-btn">Next</button>
+      <span class="pdfjs-spacer"></span>
+      <a class="pdf-link" href="${encodeURI(url)}" target="_blank" rel="noopener noreferrer">Open PDF in new tab</a>
+    </div>
+    <div class="pdfjs-canvas-wrap"><canvas class="pdfjs-canvas" id="pdf-preview-canvas"></canvas></div>
+  `;
+
+  const prevBtn = container.querySelector('#pdf-prev-btn');
+  const nextBtn = container.querySelector('#pdf-next-btn');
+  const statusEl = container.querySelector('#pdf-page-status');
+  const canvas = container.querySelector('#pdf-preview-canvas');
+  const canvasWrap = container.querySelector('.pdfjs-canvas-wrap');
+  const ctx = canvas ? canvas.getContext('2d', { alpha: false }) : null;
+  if (!prevBtn || !nextBtn || !statusEl || !canvas || !canvasWrap || !ctx) return false;
+
+  const loadingTask = window.pdfjsLib.getDocument({ url });
+  const pdfDoc = await loadingTask.promise;
+  let pageNum = 1;
+  let rendering = false;
+
+  const renderPage = async (targetPage) => {
+    if (rendering) return;
+    rendering = true;
+    try {
+      pageNum = Math.max(1, Math.min(targetPage, pdfDoc.numPages));
+      statusEl.textContent = `Rendering page ${pageNum}…`;
+
+      const page = await pdfDoc.getPage(pageNum);
+      const baseViewport = page.getViewport({ scale: 1.0 });
+      const targetWidth = Math.max(320, canvasWrap.clientWidth - 24);
+      const scale = Math.max(0.65, Math.min(2.4, targetWidth / Math.max(baseViewport.width, 1)));
+      const viewport = page.getViewport({ scale });
+      const dpr = window.devicePixelRatio || 1;
+
+      canvas.width = Math.floor(viewport.width * dpr);
+      canvas.height = Math.floor(viewport.height * dpr);
+      canvas.style.width = `${Math.floor(viewport.width)}px`;
+      canvas.style.height = `${Math.floor(viewport.height)}px`;
+
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      await page.render({ canvasContext: ctx, viewport }).promise;
+
+      statusEl.textContent = `Page ${pageNum} / ${pdfDoc.numPages}`;
+      prevBtn.disabled = pageNum <= 1;
+      nextBtn.disabled = pageNum >= pdfDoc.numPages;
+    } finally {
+      rendering = false;
+    }
+  };
+
+  prevBtn.addEventListener('click', () => {
+    if (pageNum > 1) renderPage(pageNum - 1);
+  });
+  nextBtn.addEventListener('click', () => {
+    if (pageNum < pdfDoc.numPages) renderPage(pageNum + 1);
+  });
+
+  await renderPage(1);
+  return true;
+}
+
+function renderPdfFallback(url, container) {
+  container.innerHTML = `
+    <iframe loading="lazy" src="${encodeURI(url)}#toolbar=0&navpanes=0&statusbar=0"></iframe>
+    <div class="pdf-fallback-note">Inline browser preview fallback. If this still downloads, use "Open PDF in new tab".</div>
+  `;
+}
+
+async function loadIdeaInput() {
+  const meta = document.getElementById('idea-meta');
+  const content = document.getElementById('idea-content');
+  const toggle = document.getElementById('idea-view-toggle');
+  if (!meta || !content) return;
+
+  try {
+    const resp = await fetch(`/api/jobs/${JOB_ID}/idea`);
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+
+    if (!data.found) {
+      const stem = data.stem ? ` (stem: ${data.stem})` : '';
+      meta.textContent = `No matching idea JSON found${stem}.`;
+      content.innerHTML = '<div class="no-data">Could not resolve `idea_<stem>.json` for this job.</div>';
+      if (toggle) toggle.style.display = 'none';
+      return;
+    }
+
+    const formatLabel = data.format === 'json' ? 'JSON' : 'Text';
+    meta.textContent = `${formatLabel} source: ${data.source || 'unknown'}`;
+
+    ideaRawText = data.content || '';
+    ideaPrettyHtml = '';
+    ideaCanToggle = false;
+    ideaViewMode = 'pretty';
+
+    if (data.format === 'json') {
+      try {
+        const parsed = JSON.parse(ideaRawText);
+        ideaPrettyHtml = renderIdeaNode(parsed);
+        ideaCanToggle = true;
+      } catch (_) {
+        ideaCanToggle = false;
+      }
+    }
+
+    updateIdeaView();
+  } catch (e) {
+    console.error('Failed to load job idea input:', e);
+    meta.textContent = 'Failed to load idea input.';
+    content.innerHTML = '<div class="no-data">Failed to load idea input.</div>';
+    if (toggle) toggle.style.display = 'none';
+  }
+}
+
+function setActiveTab(tabName) {
+  activeTab = tabName;
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tabName);
+  });
+  document.querySelectorAll('.tab-panel').forEach(panel => {
+    panel.classList.toggle('active', panel.id === `tab-${tabName}`);
+  });
+
+  if (tabName === 'submissions' && !submissionsLoaded) {
+    loadSubmissions();
+  }
+}
 
 function renderFilterButtons() {
   const counts = {};
@@ -441,12 +1062,14 @@ function renderFilterButtons() {
   const container = document.getElementById('timeline-filters');
   container.innerHTML = '';
 
-  // "All" button
   const allBtn = document.createElement('button');
   allBtn.className = 'tf-btn' + (activeFilters.size === 0 ? ' active' : '');
   allBtn.textContent = 'All';
-  allBtn.style.background = activeFilters.size === 0 ? 'var(--accent)' : '';
-  allBtn.style.color = activeFilters.size === 0 ? '#fff' : '';
+  if (activeFilters.size === 0) {
+    allBtn.style.background = 'rgba(53,194,255,0.22)';
+    allBtn.style.color = '#fff';
+    allBtn.style.borderColor = '#35c2ff';
+  }
   allBtn.onclick = () => { activeFilters.clear(); renderFilterButtons(); renderTimeline(); };
   container.appendChild(allBtn);
 
@@ -456,7 +1079,7 @@ function renderFilterButtons() {
     const isActive = activeFilters.has(type);
     btn.className = 'tf-btn' + (isActive ? ' active' : '');
     if (isActive) {
-      btn.style.background = cfg.color;
+      btn.style.background = cfg.color + '33';
       btn.style.borderColor = cfg.color;
       btn.style.color = '#fff';
     }
@@ -476,7 +1099,6 @@ function createEventEl(ev) {
   const div = document.createElement('div');
   div.className = `event ev-${ev.event_type}`;
   div.dataset.step = ev.step;
-  if (ev.tool_id) div.dataset.toolId = ev.tool_id;
 
   let tokensHtml = '';
   if (ev.tokens) {
@@ -487,32 +1109,27 @@ function createEventEl(ev) {
   div.innerHTML = `
     <div class="event-header">
       <span class="event-step">#${ev.step}</span>
-      <span class="event-type-tag" style="background:${cfg.color}22;color:${cfg.color}">${cfg.label}</span>
+      <span class="event-type-tag" style="background:${cfg.color}2a;color:${cfg.color}">${cfg.label}</span>
       <span class="event-summary" title="${escHtml(ev.summary)}">${escHtml(ev.summary)}</span>
       ${tokensHtml}
     </div>
     ${ev.detail ? `<div class="event-detail">${escHtml(ev.detail)}</div>` : ''}
   `;
 
-  if (ev.detail) {
-    div.onclick = () => div.classList.toggle('expanded');
-  }
-
-  if (ev.tool_id) {
-    div.addEventListener('mouseenter', () => {
-      document.querySelectorAll(`.event[data-tool-id="${ev.tool_id}"]`).forEach(el => el.classList.add('highlight-tool'));
-    });
-    div.addEventListener('mouseleave', () => {
-      document.querySelectorAll(`.event[data-tool-id="${ev.tool_id}"]`).forEach(el => el.classList.remove('highlight-tool'));
-    });
-  }
+  div.addEventListener('click', () => {
+    if (selectedEvent && selectedEvent !== div) selectedEvent.classList.remove('selected');
+    if (selectedEvent === div) {
+      div.classList.remove('selected');
+      if (ev.detail) div.classList.remove('expanded');
+      selectedEvent = null;
+      return;
+    }
+    div.classList.add('selected');
+    if (ev.detail) div.classList.toggle('expanded');
+    selectedEvent = div;
+  });
 
   return div;
-}
-
-function escHtml(s) {
-  if (!s) return '';
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function renderTimeline() {
@@ -524,8 +1141,7 @@ function renderTimeline() {
     filtered = allEvents.filter(e => activeFilters.has(e.event_type));
   }
 
-  // For performance, only render last 500 events
-  const toRender = filtered.slice(-500);
+  const toRender = filtered.slice(-450);
   const frag = document.createDocumentFragment();
   toRender.forEach(ev => frag.appendChild(createEventEl(ev)));
   container.appendChild(frag);
@@ -537,22 +1153,15 @@ function appendEvent(ev) {
 
   const container = document.getElementById('timeline');
   const panel = document.getElementById('timeline-panel');
-  const wasAtBottom = panel.scrollHeight - panel.scrollTop - panel.clientHeight < 100;
+  const wasAtBottom = panel.scrollHeight - panel.scrollTop - panel.clientHeight < 110;
 
   container.appendChild(createEventEl(ev));
+  if (wasAtBottom) panel.scrollTop = panel.scrollHeight;
 
-  // Auto-scroll if user was near bottom
-  if (wasAtBottom) {
-    panel.scrollTop = panel.scrollHeight;
-  }
-
-  // Trim if too many DOM nodes
-  while (container.children.length > 600) {
+  while (container.children.length > 550) {
     container.removeChild(container.firstChild);
   }
 }
-
-// ── Charts ──
 
 function initTokenChart() {
   const ctx = document.getElementById('token-chart').getContext('2d');
@@ -561,9 +1170,9 @@ function initTokenChart() {
     data: {
       labels: [],
       datasets: [
-        { label: 'Output', data: [], borderColor: '#3fb950', backgroundColor: 'rgba(63,185,80,0.1)', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 },
-        { label: 'Input', data: [], borderColor: '#58a6ff', backgroundColor: 'rgba(88,166,255,0.1)', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 },
-        { label: 'Cache Read', data: [], borderColor: '#bc8cff', backgroundColor: 'rgba(188,140,255,0.1)', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 },
+        { label: 'Output', data: [], borderColor: '#4ce0b3', backgroundColor: 'rgba(76,224,179,0.09)', fill: true, tension: 0.28, pointRadius: 0, borderWidth: 2 },
+        { label: 'Input', data: [], borderColor: '#35c2ff', backgroundColor: 'rgba(53,194,255,0.10)', fill: true, tension: 0.28, pointRadius: 0, borderWidth: 2 },
+        { label: 'Cache Read', data: [], borderColor: '#9e8dff', backgroundColor: 'rgba(158,141,255,0.1)', fill: true, tension: 0.28, pointRadius: 0, borderWidth: 2 },
       ]
     },
     options: {
@@ -571,16 +1180,12 @@ function initTokenChart() {
       maintainAspectRatio: false,
       interaction: { intersect: false, mode: 'index' },
       plugins: {
-        legend: { position: 'top', labels: { boxWidth: 12, font: { size: 10 }, color: '#8b949e' } },
-        tooltip: {
-          callbacks: {
-            label: ctx => `${ctx.dataset.label}: ${formatTokens(ctx.raw)}`
-          }
-        }
+        legend: { position: 'top', labels: { boxWidth: 12, font: { size: 10 }, color: '#9eb3cb' } },
+        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${formatTokens(ctx.raw)}` } }
       },
       scales: {
-        x: { display: true, grid: { color: '#21262d' }, ticks: { color: '#484f58', font: { size: 9 }, maxTicksLimit: 8 } },
-        y: { display: true, grid: { color: '#21262d' }, ticks: { color: '#484f58', font: { size: 9 }, callback: v => formatTokens(v) } }
+        x: { grid: { color: '#1f2d43' }, ticks: { color: '#6f859f', font: { size: 9 }, maxTicksLimit: 8 } },
+        y: { grid: { color: '#1f2d43' }, ticks: { color: '#6f859f', font: { size: 9 }, callback: v => formatTokens(v) } }
       }
     }
   });
@@ -603,27 +1208,30 @@ function initToolChart() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      cutout: '60%',
-      plugins: {
-        legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 }, color: '#8b949e', padding: 6 } }
-      }
+      cutout: '62%',
+      plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 }, color: '#9eb3cb', padding: 6 } } }
     }
   });
 }
 
 function updateToolChart(breakdown) {
-  if (!toolChart || !breakdown.length) return;
-  const colors = ['#58a6ff','#3fb950','#bc8cff','#f778ba','#d29922','#39d2c0','#d18616','#8b949e','#484f58','#f85149'];
+  if (!toolChart) return;
+  if (!breakdown || !breakdown.length) {
+    toolChart.data.labels = [];
+    toolChart.data.datasets[0].data = [];
+    toolChart.update('none');
+    document.getElementById('tool-table').innerHTML = '';
+    return;
+  }
+  const colors = ['#35c2ff','#4ce0b3','#9e8dff','#ff6f91','#ffbf69','#5de0ff','#6f859f','#ff9f87','#8ea2b8','#ff7e7e'];
   toolChart.data.labels = breakdown.map(b => b.tool);
   toolChart.data.datasets[0].data = breakdown.map(b => b.count);
   toolChart.data.datasets[0].backgroundColor = breakdown.map((_, i) => colors[i % colors.length]);
   toolChart.update('none');
 
-  // Table
-  const table = document.getElementById('tool-table');
-  table.innerHTML = breakdown.map(b => `
+  document.getElementById('tool-table').innerHTML = breakdown.map(b => `
     <tr>
-      <td>${b.tool}</td>
+      <td>${escHtml(b.tool)}</td>
       <td>${b.count}</td>
       <td>${b.pct}%</td>
     </tr>
@@ -638,114 +1246,235 @@ function initActivityChart() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      cutout: '60%',
-      plugins: {
-        legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 }, color: '#8b949e', padding: 6 } }
-      }
+      cutout: '62%',
+      plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 }, color: '#9eb3cb', padding: 6 } } }
     }
   });
 }
 
 function updateActivityChart(breakdown) {
-  if (!activityChart || !breakdown.length) return;
+  if (!activityChart) return;
+  if (!breakdown || !breakdown.length) {
+    activityChart.data.labels = [];
+    activityChart.data.datasets[0].data = [];
+    activityChart.update('none');
+    return;
+  }
   activityChart.data.labels = breakdown.map(b => (EVENT_TYPES[b.type] || {}).label || b.type);
   activityChart.data.datasets[0].data = breakdown.map(b => b.count);
   activityChart.data.datasets[0].backgroundColor = breakdown.map(b => (EVENT_TYPES[b.type] || {}).color || '#30363d');
   activityChart.update('none');
 }
 
-// ── Submissions ──
+function renderSubmissionNav() {
+  const nav = document.getElementById('submissions-list-nav');
+  if (!submissionsCache.length) {
+    nav.innerHTML = '<div class="no-data">No submissions yet.</div>';
+    return;
+  }
 
-async function loadSubmissions() {
-  try {
-    const resp = await fetch(`/api/jobs/${JOB_ID}/submissions`);
-    const data = await resp.json();
-    const container = document.getElementById('submissions-list');
+  nav.innerHTML = `
+    <div class="sub-nav-list">
+      ${submissionsCache.map((s, idx) => `
+        <button class="sub-nav-item ${idx === selectedSubmissionIdx ? 'active' : ''}" data-sub-idx="${idx}">
+          <div class="sub-nav-top">
+            <span class="sub-nav-version">v${s.version ?? '?'}</span>
+            ${s.reviewer_mode === 'subagent' ? '<span class="sub-mode">subagent</span>' : ''}
+          </div>
+          <div class="sub-nav-time">${escHtml(formatTimestamp(s.timestamp) || 'Unknown time')}</div>
+        </button>
+      `).join('')}
+    </div>
+  `;
 
-    if (!data.submissions || !data.submissions.length) {
-      container.innerHTML = '<div class="no-data">No submissions yet</div>';
-      document.getElementById('stat-subs').textContent = '0';
-      return;
-    }
+  nav.querySelectorAll('[data-sub-idx]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = Number(btn.dataset.subIdx);
+      if (Number.isNaN(idx)) return;
+      selectedSubmissionIdx = idx;
+      renderSubmissionNav();
+      renderSubmissionDetail();
+    });
+  });
+}
 
-    document.getElementById('stat-subs').textContent = data.total;
+function renderSubmissionDetail() {
+  const container = document.getElementById('submissions-dossier');
+  const meta = document.getElementById('dossier-meta');
 
-    container.innerHTML = data.submissions.map(s => `
-      <div class="submission-card">
-        <div class="sub-header">
-          <span class="sub-version">v${s.version}</span>
-          <span class="sub-time">${s.timestamp || ''}</span>
-          ${s.reviewer_mode === 'subagent' ? '<span class="sub-mode">subagent</span>' : ''}
+  if (selectedSubmissionIdx < 0 || selectedSubmissionIdx >= submissionsCache.length) {
+    container.innerHTML = '<div class="no-data">Select a submission from the left.</div>';
+    meta.textContent = 'Select a submission version.';
+    return;
+  }
+
+  const s = submissionsCache[selectedSubmissionIdx];
+  const review = renderMarkdown(s.review_markdown || s.review || '');
+  const rebuttal = s.rebuttal_markdown || s.rebuttal;
+  const rebuttalHtml = rebuttal ? renderMarkdown(rebuttal) : '<p class="md-empty">No rebuttal recorded.</p>';
+  meta.textContent = `Version v${s.version ?? '?'} • ${formatTimestamp(s.timestamp) || 'Unknown time'}`;
+
+  container.innerHTML = `
+    <article class="submission-entry">
+      <div class="entry-header">
+        <span class="sub-version">v${s.version ?? '?'}</span>
+        <span class="sub-time">${escHtml(formatTimestamp(s.timestamp) || '')}</span>
+        ${s.reviewer_mode === 'subagent' ? '<span class="sub-mode">subagent</span>' : ''}
+      </div>
+      <div class="submission-body">
+        <div class="paper-actions">
+          ${s.paper_url ? '<button class="pdf-btn" id="preview-pdf-btn">Preview PDF</button>' : ''}
+          ${s.paper_url ? `<a class="pdf-link" href="${encodeURI(s.paper_url)}" target="_blank" rel="noopener noreferrer">Open PDF in new tab</a>` : ''}
+          ${!s.paper_url ? '<span class="md-empty">No submission PDF captured for this version.</span>' : ''}
         </div>
-        <div class="sub-review" onclick="this.classList.toggle('expanded')">${escHtml(s.review || 'No review')}</div>
-        ${s.rebuttal ? `<div class="sub-rebuttal" onclick="this.classList.toggle('expanded')">${escHtml(s.rebuttal)}</div>` : ''}
+        <div class="paper-wrap" id="pdf-preview-wrap" style="display:none;"></div>
+        <section class="md-section">
+          <h4>Review</h4>
+          <div class="md-content">${review}</div>
+        </section>
+        <section class="md-section">
+          <h4>Rebuttal</h4>
+          <div class="md-content">${rebuttalHtml}</div>
+        </section>
         <div class="sub-badges">
           ${s.has_pdf ? '<span class="sub-badge">PDF</span>' : ''}
           ${s.has_tex ? '<span class="sub-badge">TEX</span>' : ''}
-          ${s.has_figures ? `<span class="sub-badge">${s.figures_count} figs</span>` : ''}
+          ${s.has_figures ? `<span class="sub-badge">${s.figures_count || 0} figs</span>` : ''}
         </div>
       </div>
-    `).join('');
-  } catch (e) {
-    console.error('Failed to load submissions:', e);
+    </article>
+  `;
+
+  container.querySelectorAll('.md-content a').forEach(a => {
+    a.setAttribute('target', '_blank');
+    a.setAttribute('rel', 'noopener noreferrer');
+  });
+
+  const previewBtn = document.getElementById('preview-pdf-btn');
+  const previewWrap = document.getElementById('pdf-preview-wrap');
+  if (previewBtn && previewWrap && s.paper_url) {
+    const showPreview = async () => {
+      if (!previewWrap.dataset.loaded) {
+        previewWrap.innerHTML = '<div class="paper-empty">Loading PDF preview…</div>';
+        let rendered = false;
+        try {
+          const pdfReady = await ensurePdfJs();
+          if (pdfReady) {
+            rendered = await renderPdfWithPdfJs(s.paper_url, previewWrap);
+          }
+        } catch (e) {
+          console.warn('PDF.js preview failed, using iframe fallback:', e);
+        }
+        if (!rendered) {
+          renderPdfFallback(s.paper_url, previewWrap);
+        }
+        previewWrap.dataset.loaded = '1';
+      }
+      previewWrap.style.display = '';
+      previewBtn.textContent = 'Hide PDF';
+    };
+
+    previewBtn.addEventListener('click', async () => {
+      const showing = previewWrap.style.display !== 'none';
+      if (showing) {
+        previewWrap.style.display = 'none';
+        previewBtn.textContent = 'Preview PDF';
+        return;
+      }
+      await showPreview();
+    });
+
+    void showPreview();
   }
 }
 
-// ── Data loading ──
+async function loadSubmissions(force = false) {
+  if (submissionsLoaded && !force) {
+    renderSubmissionNav();
+    renderSubmissionDetail();
+    return;
+  }
+
+  try {
+    const resp = await fetch(`/api/jobs/${JOB_ID}/submissions`);
+    const data = await resp.json();
+    const incoming = data.submissions || [];
+    const prevSig = submissionsCache.map(s => `${s.directory || ''}:${s.timestamp || ''}`).join('|');
+    const nextSig = incoming.map(s => `${s.directory || ''}:${s.timestamp || ''}`).join('|');
+    document.getElementById('stat-subs').textContent = data.total || 0;
+
+    if (submissionsLoaded && force && prevSig === nextSig) {
+      return;
+    }
+
+    submissionsCache = incoming;
+    submissionsLoaded = true;
+
+    if (!submissionsCache.length) {
+      selectedSubmissionIdx = -1;
+    } else if (selectedSubmissionIdx < 0 || selectedSubmissionIdx >= submissionsCache.length) {
+      selectedSubmissionIdx = 0;
+    }
+
+    renderSubmissionNav();
+    renderSubmissionDetail();
+  } catch (e) {
+    console.error('Failed to load submissions:', e);
+    document.getElementById('submissions-list-nav').innerHTML = '<div class="no-data">Failed to load submissions.</div>';
+    document.getElementById('submissions-dossier').innerHTML = '<div class="no-data">Failed to load submissions.</div>';
+  }
+}
 
 async function loadInitialData() {
   try {
-    // Load all events
-    const evResp = await fetch(`/api/jobs/${JOB_ID}/events`);
-    const evData = await evResp.json();
+    const ideaLoad = loadIdeaInput();
+    const [evResp, tokResp, metaResp] = await Promise.all([
+      fetch(`/api/jobs/${JOB_ID}/events`),
+      fetch(`/api/jobs/${JOB_ID}/tokens`),
+      fetch(`/api/jobs/${JOB_ID}/meta`),
+    ]);
+    const [evData, tokData, metaData] = await Promise.all([
+      evResp.json(),
+      tokResp.json(),
+      metaResp.json(),
+    ]);
     allEvents = evData.events || [];
     lastStep = evData.total_lines || 0;
 
-    // Update header
-    if (evData.model) {
-      document.getElementById('model-badge').textContent = evData.model.replace('claude-', '');
-    }
+    if (evData.model) document.getElementById('model-badge').textContent = String(evData.model).replace('claude-', '');
     document.getElementById('stat-events').textContent = allEvents.length;
 
     renderFilterButtons();
     renderTimeline();
-
-    // Scroll to bottom
-    const panel = document.getElementById('timeline-panel');
-    panel.scrollTop = panel.scrollHeight;
-
-    // Load tokens
-    const tokResp = await fetch(`/api/jobs/${JOB_ID}/tokens`);
-    const tokData = await tokResp.json();
+    document.getElementById('timeline-panel').scrollTop = document.getElementById('timeline-panel').scrollHeight;
 
     if (tokData.cost) {
       document.getElementById('stat-tokens').textContent = formatTokens(tokData.cost.total_tokens);
-      document.getElementById('stat-cost').textContent = '$' + tokData.cost.estimated_cost_usd.toFixed(2);
+      document.getElementById('stat-cost').textContent = '$' + (tokData.cost.estimated_cost_usd || 0).toFixed(2);
     }
-
     updateTokenChart(tokData.cumulative_tokens || []);
     updateToolChart(tokData.tool_breakdown || []);
     updateActivityChart(tokData.event_type_breakdown || []);
 
-    // Load submissions
-    await loadSubmissions();
-
-    // Determine if job is live
-    const jobsResp = await fetch('/api/jobs');
-    const jobs = await jobsResp.json();
-    const thisJob = jobs.find(j => j.id === JOB_ID);
-    if (thisJob) {
+    if (metaResp.ok && !metaData.error) {
       const badge = document.getElementById('status-badge');
-      badge.textContent = thisJob.status;
-      badge.className = 'status-badge ' + thisJob.status;
-      isLive = thisJob.status === 'running';
+      badge.textContent = metaData.status;
+      badge.className = 'status-badge ' + metaData.status;
+      if (metaData.model) {
+        document.getElementById('model-badge').textContent = String(metaData.model).replace('claude-', '');
+      }
+      isLive = metaData.status === 'running';
+      document.getElementById('stat-subs').textContent = metaData.submissions || 0;
+    } else {
+      document.getElementById('status-badge').className = 'status-badge unknown';
+      document.getElementById('status-badge').textContent = 'unknown';
     }
 
-    // Start SSE if live
-    if (isLive) {
-      startSSE();
+    await ideaLoad;
+    if (activeTab === 'submissions') {
+      await loadSubmissions();
     }
-
+    if (isLive) startSSE();
   } catch (e) {
     console.error('Failed to load job data:', e);
   }
@@ -759,7 +1488,7 @@ function startSSE() {
   evtSource.addEventListener('new_event', (e) => {
     const event = JSON.parse(e.data);
     appendEvent(event);
-    lastStep = Math.max(lastStep, event.line_num + 1);
+    lastStep = Math.max(lastStep, (event.line_num || 0) + 1);
     document.getElementById('stat-events').textContent = allEvents.length;
     renderFilterButtons();
   });
@@ -768,34 +1497,44 @@ function startSSE() {
     const m = JSON.parse(e.data);
     if (m.cost) {
       document.getElementById('stat-tokens').textContent = formatTokens(m.cost.total_tokens);
-      document.getElementById('stat-cost').textContent = '$' + m.cost.estimated_cost_usd.toFixed(2);
+      document.getElementById('stat-cost').textContent = '$' + (m.cost.estimated_cost_usd || 0).toFixed(2);
     }
     updateToolChart(m.tool_breakdown || []);
     updateActivityChart(m.event_type_breakdown || []);
-    // For cumulative chart, refetch full data periodically
+    if (typeof m.total_lines === 'number') lastStep = Math.max(lastStep, m.total_lines);
   });
 
   evtSource.onerror = () => {
-    console.warn('SSE connection lost, retrying in 5s...');
-    setTimeout(() => {
-      if (isLive) startSSE();
-    }, 5000);
+    setTimeout(() => { if (isLive) startSSE(); }, 5000);
   };
 
-  // Periodically refresh the full cumulative token chart
-  setInterval(async () => {
+  if (tokenRefreshTimer) clearInterval(tokenRefreshTimer);
+  tokenRefreshTimer = setInterval(async () => {
     if (!isLive) return;
     try {
-      const resp = await fetch(`/api/jobs/${JOB_ID}/tokens`);
-      const data = await resp.json();
-      updateTokenChart(data.cumulative_tokens || []);
-    } catch (e) {}
-  }, 10000);
+      const tokResp = await fetch(`/api/jobs/${JOB_ID}/tokens`);
+      const tokData = await tokResp.json();
+      updateTokenChart(tokData.cumulative_tokens || []);
+      if (activeTab === 'submissions') {
+        await loadSubmissions(true);
+      }
+    } catch (_) {}
+  }, 12000);
 }
 
-// ── Init ──
-
 document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => setActiveTab(btn.dataset.tab));
+  });
+  const ideaToggle = document.getElementById('idea-view-toggle');
+  if (ideaToggle) {
+    ideaToggle.addEventListener('click', () => {
+      if (!ideaCanToggle) return;
+      ideaViewMode = ideaViewMode === 'raw' ? 'pretty' : 'raw';
+      updateIdeaView();
+    });
+  }
+
   initTokenChart();
   initToolChart();
   initActivityChart();
