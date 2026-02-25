@@ -100,11 +100,29 @@ REVIEW_EOF
             . "$HOME/.nvm/nvm.sh"
         fi
 
-        if ! cat "$REVIEW_PROMPT_FILE" | gemini --yolo \
-            > "$RAW_RESPONSE" 2>"$BASE_DIR/reviewer_subagent_stderr.log"; then
+        # Use --output-format json and extract .response to get clean output
+        # without chain-of-thought / tool narration leaking into the review.
+        GEMINI_RAW_JSON="$BASE_DIR/reviewer_gemini_raw.json"
+        if ! cat "$REVIEW_PROMPT_FILE" | gemini --yolo --output-format json \
+            > "$GEMINI_RAW_JSON" 2>"$BASE_DIR/reviewer_subagent_stderr.log"; then
             echo "Warning: Gemini reviewer subagent returned non-zero exit code." >&2
         fi
-        rm -f "$REVIEW_PROMPT_FILE"
+        # Extract just the response field (final answer, no CoT)
+        python3 -c "
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        data = json.load(f)
+    response = data.get('response', '')
+    with open(sys.argv[2], 'w') as f:
+        f.write(response)
+except Exception as e:
+    print(f'Warning: failed to parse Gemini JSON response: {e}', file=sys.stderr)
+    # Fallback: copy raw JSON as-is
+    import shutil
+    shutil.copy(sys.argv[1], sys.argv[2])
+" "$GEMINI_RAW_JSON" "$RAW_RESPONSE"
+        rm -f "$REVIEW_PROMPT_FILE" "$GEMINI_RAW_JSON"
 
     else
         # --- Claude Code reviewer ---
