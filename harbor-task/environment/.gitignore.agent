@@ -1,0 +1,36 @@
+# === AI Scientist agent .gitignore ===
+# Push: code, results (JSON/CSV), figures, PDFs, paper, submissions
+# Skip: datasets, model weights, cloned repos, build caches
+
+# Large datasets & model weights — re-downloadable
+/data
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.onnx
+
+# Cloned third-party repos — re-cloneable
+experiment_codebase/cloned_repos/
+
+# Python caches
+*.pyc
+__pycache__/
+*.egg-info/
+
+# Secrets & runtime
+.env
+
+# Node (Claude Code CLI internals)
+node_modules/
+
+# LaTeX intermediates (keep .tex and .pdf)
+*.aux
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+
+# Template copy (already in image)
+blank_icbinb_latex/

@@ -245,6 +245,41 @@ for env_file in "$SCRIPT_DIR/.env" "$SCRIPT_DIR/../.env"; do
     fi
 done
 
+# --- GitLab repo setup (if GITLAB_KEY is set) ---
+GITLAB_REPO_URL=""
+GITLAB_BRANCH=""
+GITLAB_BRANCHES=""
+GITLAB_WEB_URL=""
+if [[ -n "${GITLAB_KEY:-}" ]]; then
+    GITLAB_TS="$(date -u +%Y-%m-%d-%H-%M)"
+    GITLAB_JSON=$(python3 "$SCRIPT_DIR/scripts/gitlab_setup.py" \
+        --idea-name "$IDEA_NAME" \
+        --agent "$AGENT_TYPE" \
+        --timestamp "$GITLAB_TS" 2>/dev/null || echo "")
+    if [[ -n "$GITLAB_JSON" ]]; then
+        GITLAB_REPO_URL=$(echo "$GITLAB_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('repo_url',''))")
+        GITLAB_BRANCH=$(echo "$GITLAB_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('branch',''))")
+        GITLAB_WEB_URL=$(echo "$GITLAB_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('web_url',''))")
+        GITLAB_BRANCHES=$(echo "$GITLAB_JSON" | python3 -c "
+import sys, json
+branches = json.load(sys.stdin).get('sibling_branches', [])
+if branches:
+    print('\n'.join(f'- \`{b}\`' for b in branches))
+else:
+    print('(none — this is the first run)')
+")
+        # Append GitLab vars to the container's .env
+        {
+            echo ""
+            echo "GITLAB_REPO_URL=$GITLAB_REPO_URL"
+            echo "GITLAB_BRANCH=$GITLAB_BRANCH"
+        } >> "$ENV_DIR/.env"
+        echo "GitLab repo: $GITLAB_WEB_URL (branch: $GITLAB_BRANCH)"
+    else
+        echo "Warning: GitLab setup failed (continuing without git push)" >&2
+    fi
+fi
+
 # --- Stage repo files into the Docker build context ---
 echo "Staging build context..."
 cp -rL "$SCRIPT_DIR/blank_icbinb_latex" "$ENV_DIR/blank_icbinb_latex"
@@ -312,13 +347,17 @@ $FEEDBACK
 fi
 
 python3 -c "
-import sys
+import sys, os
 template = open(sys.argv[1]).read()
 idea = open(sys.argv[2]).read()
 resume = sys.argv[3] if len(sys.argv) > 3 else ''
-result = template.replace('{{IDEA_CONTENT}}', idea).replace('{{RESUME_CONTEXT}}', resume)
-open(sys.argv[4], 'w').write(result)
-" "$INSTRUCTION_TEMPLATE" "$IDEA_JSON" "$RESUME_NOTE" "$INSTRUCTION_OUT"
+gitlab_branches = sys.argv[4] if len(sys.argv) > 4 else ''
+result = (template
+    .replace('{{IDEA_CONTENT}}', idea)
+    .replace('{{RESUME_CONTEXT}}', resume)
+    .replace('{{GITLAB_BRANCHES}}', gitlab_branches))
+open(sys.argv[5], 'w').write(result)
+" "$INSTRUCTION_TEMPLATE" "$IDEA_JSON" "$RESUME_NOTE" "$GITLAB_BRANCHES" "$INSTRUCTION_OUT"
 
 # --- Build harbor run command ---
 TIMESTAMP="$(date +%Y-%m-%d__%H-%M-%S)"
@@ -382,6 +421,10 @@ if [[ -n "$PREV_ARTIFACTS" ]]; then
 fi
 if [[ -n "$FEEDBACK" ]]; then
     echo "  Feedback: (included)"
+fi
+if [[ -n "$GITLAB_WEB_URL" ]]; then
+    echo "  GitLab:  $GITLAB_WEB_URL"
+    echo "  Branch:  $GITLAB_BRANCH"
 fi
 echo ""
 
