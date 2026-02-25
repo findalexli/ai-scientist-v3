@@ -190,11 +190,12 @@ header h1 span { color: var(--accent); }
   font-size: 11px;
   font-weight: 700;
 }
-.tokens-cell, .cost-cell {
+.tokens-cell, .cost-cell, .duration-cell {
   font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
 }
 .cost-cell { color: var(--warn); }
+.duration-cell { color: var(--text-dim); white-space: nowrap; }
 .task-name {
   color: var(--text-dim);
   max-width: 440px;
@@ -226,8 +227,8 @@ header h1 span { color: var(--accent); }
     align-self: stretch;
     text-align: center;
   }
-  .jobs-table th:nth-child(7),
-  .jobs-table td:nth-child(7) {
+  .jobs-table th:nth-child(8),
+  .jobs-table td:nth-child(8) {
     display: none;
   }
 }
@@ -258,6 +259,7 @@ header h1 span { color: var(--accent); }
         <th data-sort="status">Status</th>
         <th data-sort="id">Job</th>
         <th data-sort="model">Model</th>
+        <th data-sort="duration">Duration</th>
         <th data-sort="tokens">Tokens</th>
         <th data-sort="cost">Cost</th>
         <th data-sort="submissions">Submissions</th>
@@ -265,7 +267,7 @@ header h1 span { color: var(--accent); }
       </tr>
     </thead>
     <tbody id="jobs-body">
-      <tr><td colspan="7" class="loading">Loading jobs...</td></tr>
+      <tr><td colspan="8" class="loading">Loading jobs...</td></tr>
     </tbody>
   </table>
 </div>
@@ -282,6 +284,17 @@ function formatTokens(n) {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
   if (n >= 1_000) return (n / 1_000).toFixed(0) + 'K';
   return String(n);
+}
+
+function formatDuration(seconds) {
+  if (seconds === null || seconds === undefined) return '-';
+  const s = Math.max(0, Math.floor(Number(seconds) || 0));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const ss = s % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${ss}s`;
+  return `${ss}s`;
 }
 
 function escHtml(s) {
@@ -344,6 +357,10 @@ function renderTable() {
         va = a.submissions || 0;
         vb = b.submissions || 0;
         break;
+      case 'duration':
+        va = a.duration_seconds || 0;
+        vb = b.duration_seconds || 0;
+        break;
       default:
         va = a[sortKey] || '';
         vb = b[sortKey] || '';
@@ -355,7 +372,7 @@ function renderTable() {
 
   const tbody = document.getElementById('jobs-body');
   if (!jobs.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No jobs found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No jobs found.</td></tr>';
     return;
   }
 
@@ -369,6 +386,7 @@ function renderTable() {
       </td>
       <td>${escHtml(j.id)}</td>
       <td><span class="model-badge">${escHtml(j.model || 'unknown')}</span></td>
+      <td class="duration-cell">${formatDuration(j.duration_seconds)}</td>
       <td class="tokens-cell">${formatTokens(j.tokens?.total_tokens)}</td>
       <td class="cost-cell">${j.tokens?.estimated_cost_usd ? '$' + Number(j.tokens.estimated_cost_usd).toFixed(2) : '-'}</td>
       <td>${j.submissions ? '<span class="submissions-badge">v' + j.submissions + '</span>' : '-'}</td>
@@ -387,7 +405,7 @@ async function fetchJobs() {
       `${allJobs.length} jobs • updated ${new Date().toLocaleTimeString()}`;
   } catch (e) {
     document.getElementById('jobs-body').innerHTML =
-      '<tr><td colspan="7" class="empty-state">Error loading jobs.</td></tr>';
+      '<tr><td colspan="8" class="empty-state">Error loading jobs.</td></tr>';
   }
 }
 

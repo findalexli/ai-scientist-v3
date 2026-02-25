@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -301,6 +302,58 @@ def get_submission_count(job_dir: str) -> int:
     return 0
 
 
+def _parse_iso8601(ts: Optional[str]) -> Optional[datetime]:
+    """Parse ISO timestamp used in Harbor artifacts."""
+    if not ts or not isinstance(ts, str):
+        return None
+    normalized = ts.strip()
+    if not normalized:
+        return None
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def get_job_duration_seconds(job_dir: str, status: str) -> Optional[int]:
+    """Best-effort wall-clock duration based on result timestamps."""
+    candidates = [os.path.join(job_dir, "result.json")]
+    try:
+        for entry in os.listdir(job_dir):
+            if entry.startswith("harbor-task"):
+                candidates.append(os.path.join(job_dir, entry, "verifier", "artifacts", "result.json"))
+    except OSError:
+        pass
+
+    for path in candidates:
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path) as f:
+                payload = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            continue
+
+        started = _parse_iso8601(payload.get("started_at"))
+        finished = _parse_iso8601(payload.get("finished_at"))
+        if not started:
+            continue
+
+        if finished and finished >= started:
+            return int((finished - started).total_seconds())
+        if status == "running":
+            now = datetime.now(timezone.utc)
+            if now >= started:
+                return int((now - started).total_seconds())
+
+    return None
+
+
 def get_model_name(config: dict) -> str:
     """Extract model name from config."""
     agents = config.get("agents", [])
@@ -524,6 +577,7 @@ def discover_jobs() -> list:
 
         config = read_config(job_dir)
         status = get_job_status(job_dir)
+        duration_seconds = get_job_duration_seconds(job_dir, status)
         activity_path = find_agent_activity_path(job_dir)
 
         line_count = 0
@@ -580,6 +634,7 @@ def discover_jobs() -> list:
             "id": name,
             "dir": job_dir,
             "status": status,
+            "duration_seconds": duration_seconds,
             "model": model_name,
             "line_count": line_count,
             "file_size_mb": round(file_size / 1_000_000, 1),
@@ -599,6 +654,7 @@ def discover_job_meta(job_id: str) -> Optional[dict]:
 
     config = read_config(job_dir)
     status = get_job_status(job_dir)
+    duration_seconds = get_job_duration_seconds(job_dir, status)
     submissions = get_submission_count(job_dir)
     model_name = get_model_name(config)
 
@@ -611,6 +667,7 @@ def discover_job_meta(job_id: str) -> Optional[dict]:
     return {
         "id": job_id,
         "status": status,
+        "duration_seconds": duration_seconds,
         "model": model_name,
         "submissions": submissions,
     }
