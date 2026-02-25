@@ -83,22 +83,28 @@ if [ "$REVIEWER_MODE" = "subagent" ]; then
             echo "Error: reviewer prompt not found at $REVIEWER_PROMPT_FILE" >&2
             exit 1
         fi
-        # Strip the YAML frontmatter (everything between --- markers)
-        REVIEWER_SYSTEM_PROMPT=$(sed '1,/^---$/d; /^---$/,$!d; /^---$/d' "$REVIEWER_PROMPT_FILE" | sed '/^---$/d')
+        # Strip the YAML frontmatter (skip everything up to and including the second ---)
+        SECOND_MARKER=$(grep -n "^---$" "$REVIEWER_PROMPT_FILE" | sed -n '2p' | cut -d: -f1)
+        REVIEWER_SYSTEM_PROMPT=$(tail -n +$((SECOND_MARKER + 1)) "$REVIEWER_PROMPT_FILE")
 
-        REVIEW_INSTRUCTION="Review the research submission. The paper is at $TEX_PATH. Inspect the full workspace: experiment_codebase/, figures/, literature/, and latex/. Follow your review procedure and produce your review.
+        # Write the full review prompt to a temp file (too large for shell argument)
+        REVIEW_PROMPT_FILE=$(mktemp)
+        cat > "$REVIEW_PROMPT_FILE" <<REVIEW_EOF
+Review the research submission. The paper is at $TEX_PATH. Inspect the full workspace: experiment_codebase/, figures/, literature/, and latex/. Follow your review procedure and produce your review.
 
-$REVIEWER_SYSTEM_PROMPT"
+$REVIEWER_SYSTEM_PROMPT
+REVIEW_EOF
 
         # Source nvm if gemini isn't on PATH (Harbor installs it via nvm)
         if ! command -v gemini &>/dev/null && [ -f "$HOME/.nvm/nvm.sh" ]; then
             . "$HOME/.nvm/nvm.sh"
         fi
 
-        if ! gemini -p "$REVIEW_INSTRUCTION" --yolo \
+        if ! cat "$REVIEW_PROMPT_FILE" | gemini --yolo \
             > "$RAW_RESPONSE" 2>"$BASE_DIR/reviewer_subagent_stderr.log"; then
             echo "Warning: Gemini reviewer subagent returned non-zero exit code." >&2
         fi
+        rm -f "$REVIEW_PROMPT_FILE"
 
     else
         # --- Claude Code reviewer ---
