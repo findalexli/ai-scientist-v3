@@ -16,9 +16,11 @@
 #
 # Environment variables:
 #   REVIEWER_MODE  — "api" (default) uses external reviewer API (works with any runtime)
-#                    "subagent" uses Claude Code reviewer agent (.claude/agents/reviewer.md)
-#                    NOTE: "subagent" requires the Claude Code CLI (`claude` command).
-#                    It will NOT work with Gemini CLI or other agent runtimes.
+#                    "subagent" uses the agent's own CLI to review:
+#                      - Claude Code agent → claude -p --agent reviewer
+#                      - Gemini CLI agent  → gemini -p with reviewer prompt
+#                    Auto-detects which CLI is available, or uses AGENT_TYPE hint.
+#   AGENT_TYPE     — "claude-code" or "gemini-cli" (optional, for subagent CLI selection)
 #
 # One call = one version. Deterministic, atomic, no LLM in the loop.
 
@@ -58,47 +60,104 @@ echo "Reviewer mode: $REVIEWER_MODE"
 RAW_RESPONSE="$BASE_DIR/reviewer_raw_response.json"
 
 if [ "$REVIEWER_MODE" = "subagent" ]; then
-    # Requires Claude Code CLI. Will not work with Gemini or other runtimes.
-    if ! command -v claude &>/dev/null; then
-        echo "Error: REVIEWER_MODE=subagent requires the Claude Code CLI." >&2
-        exit 1
+    # Detect which CLI to use: AGENT_TYPE env var, or auto-detect from available commands
+    SUBAGENT_CLI="${AGENT_TYPE:-auto}"
+    if [ "$SUBAGENT_CLI" = "auto" ]; then
+        if command -v gemini &>/dev/null || [ -f "$HOME/.nvm/versions/node/$(ls "$HOME/.nvm/versions/node/" 2>/dev/null | tail -1)/bin/gemini" ]; then
+            SUBAGENT_CLI="gemini-cli"
+        elif command -v claude &>/dev/null; then
+            SUBAGENT_CLI="claude-code"
+        else
+            echo "Error: REVIEWER_MODE=subagent requires claude or gemini CLI." >&2
+            exit 1
+        fi
     fi
 
-    echo "Invoking reviewer subagent (this may take several minutes)..."
+    echo "Invoking reviewer subagent via $SUBAGENT_CLI (this may take several minutes)..."
 
-    # Snapshot existing session files so we can identify the reviewer's trace afterward.
-    SESSIONS_PROJECT_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/-app"
-    PRE_SESSIONS=""
-    if [ -d "$SESSIONS_PROJECT_DIR" ]; then
-        PRE_SESSIONS=$(find "$SESSIONS_PROJECT_DIR" -name "*.jsonl" 2>/dev/null | sort)
-    fi
+    if [ "$SUBAGENT_CLI" = "gemini-cli" ]; then
+        # --- Gemini CLI reviewer ---
+        # Read the reviewer prompt from the agent config file
+        REVIEWER_PROMPT_FILE="$BASE_DIR/.claude/agents/reviewer.md"
+        if [ ! -f "$REVIEWER_PROMPT_FILE" ]; then
+            echo "Error: reviewer prompt not found at $REVIEWER_PROMPT_FILE" >&2
+            exit 1
+        fi
+        # Strip the YAML frontmatter (skip everything up to and including the second ---)
+        SECOND_MARKER=$(grep -n "^---$" "$REVIEWER_PROMPT_FILE" | sed -n '2p' | cut -d: -f1)
+        REVIEWER_SYSTEM_PROMPT=$(tail -n +$((SECOND_MARKER + 1)) "$REVIEWER_PROMPT_FILE")
 
-    # CLAUDECODE="" clears the nesting guard so claude can launch from within a running session.
-    # --output-format text gives us the review directly on stdout — no parsing needed.
-    if ! CLAUDECODE="" claude -p \
-        --agent reviewer \
-        --model opus \
-        --output-format text \
-        --dangerously-skip-permissions \
-        "Review the research submission. The paper is at $TEX_PATH. Inspect the full workspace: experiment_codebase/, figures/, literature/, and latex/. Follow your review procedure and produce your review." \
-        > "$RAW_RESPONSE" 2>"$BASE_DIR/reviewer_subagent_stderr.log"; then
-        echo "Warning: Reviewer subagent returned non-zero exit code." >&2
-    fi
+        # Write the full review prompt to a temp file (too large for shell argument)
+        REVIEW_PROMPT_FILE=$(mktemp)
+        cat > "$REVIEW_PROMPT_FILE" <<REVIEW_EOF
+Review the research submission. The paper is at $TEX_PATH. Inspect the full workspace: experiment_codebase/, figures/, literature/, and latex/. Follow your review procedure and produce your review.
 
-    # Copy the reviewer's session trace (all JSONL files created during the review).
-    if [ -d "$SESSIONS_PROJECT_DIR" ]; then
-        POST_SESSIONS=$(find "$SESSIONS_PROJECT_DIR" -name "*.jsonl" 2>/dev/null | sort)
-        NEW_SESSIONS=$(comm -13 <(echo "$PRE_SESSIONS") <(echo "$POST_SESSIONS"))
-        if [ -n "$NEW_SESSIONS" ]; then
-            REVIEWER_TRACE_DIR="$BASE_DIR/reviewer_trace"
-            rm -rf "$REVIEWER_TRACE_DIR"
-            mkdir -p "$REVIEWER_TRACE_DIR"
-            echo "$NEW_SESSIONS" | while IFS= read -r f; do
-                # Flatten into trace dir: replace / with __ to keep filenames unique
-                FLAT_NAME=$(echo "$f" | sed "s|$SESSIONS_PROJECT_DIR/||; s|/|__|g")
-                cp "$f" "$REVIEWER_TRACE_DIR/$FLAT_NAME"
-            done
-            echo "Reviewer trace: $(echo "$NEW_SESSIONS" | wc -l) session file(s) saved to $REVIEWER_TRACE_DIR/"
+$REVIEWER_SYSTEM_PROMPT
+REVIEW_EOF
+
+        # Source nvm if gemini isn't on PATH (Harbor installs it via nvm)
+        if ! command -v gemini &>/dev/null && [ -f "$HOME/.nvm/nvm.sh" ]; then
+            . "$HOME/.nvm/nvm.sh"
+        fi
+
+        # Use --output-format json and extract .response to get clean output
+        # without chain-of-thought / tool narration leaking into the review.
+        GEMINI_RAW_JSON="$BASE_DIR/reviewer_gemini_raw.json"
+        if ! cat "$REVIEW_PROMPT_FILE" | gemini --yolo --output-format json \
+            > "$GEMINI_RAW_JSON" 2>"$BASE_DIR/reviewer_subagent_stderr.log"; then
+            echo "Warning: Gemini reviewer subagent returned non-zero exit code." >&2
+        fi
+        # Extract just the response field (final answer, no CoT)
+        python3 -c "
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        data = json.load(f)
+    response = data.get('response', '')
+    with open(sys.argv[2], 'w') as f:
+        f.write(response)
+except Exception as e:
+    print(f'Warning: failed to parse Gemini JSON response: {e}', file=sys.stderr)
+    # Fallback: copy raw JSON as-is
+    import shutil
+    shutil.copy(sys.argv[1], sys.argv[2])
+" "$GEMINI_RAW_JSON" "$RAW_RESPONSE"
+        rm -f "$REVIEW_PROMPT_FILE" "$GEMINI_RAW_JSON"
+
+    else
+        # --- Claude Code reviewer ---
+        # Snapshot existing session files so we can identify the reviewer's trace afterward.
+        SESSIONS_PROJECT_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/-app"
+        PRE_SESSIONS=""
+        if [ -d "$SESSIONS_PROJECT_DIR" ]; then
+            PRE_SESSIONS=$(find "$SESSIONS_PROJECT_DIR" -name "*.jsonl" 2>/dev/null | sort)
+        fi
+
+        # CLAUDECODE="" clears the nesting guard so claude can launch from within a running session.
+        # Note: --dangerously-skip-permissions fails as root (Docker containers).
+        # Omitting it lets the agent config handle permissions.
+        if ! CLAUDECODE="" claude -p \
+            --agent reviewer \
+            --output-format text \
+            "Review the research submission. The paper is at $TEX_PATH. Inspect the full workspace: experiment_codebase/, figures/, literature/, and latex/. Follow your review procedure and produce your review." \
+            > "$RAW_RESPONSE" 2>"$BASE_DIR/reviewer_subagent_stderr.log"; then
+            echo "Warning: Claude reviewer subagent returned non-zero exit code." >&2
+        fi
+
+        # Copy the reviewer's session trace (all JSONL files created during the review).
+        if [ -d "$SESSIONS_PROJECT_DIR" ]; then
+            POST_SESSIONS=$(find "$SESSIONS_PROJECT_DIR" -name "*.jsonl" 2>/dev/null | sort)
+            NEW_SESSIONS=$(comm -13 <(echo "$PRE_SESSIONS") <(echo "$POST_SESSIONS"))
+            if [ -n "$NEW_SESSIONS" ]; then
+                REVIEWER_TRACE_DIR="$BASE_DIR/reviewer_trace"
+                rm -rf "$REVIEWER_TRACE_DIR"
+                mkdir -p "$REVIEWER_TRACE_DIR"
+                echo "$NEW_SESSIONS" | while IFS= read -r f; do
+                    FLAT_NAME=$(echo "$f" | sed "s|$SESSIONS_PROJECT_DIR/||; s|/|__|g")
+                    cp "$f" "$REVIEWER_TRACE_DIR/$FLAT_NAME"
+                done
+                echo "Reviewer trace: $(echo "$NEW_SESSIONS" | wc -l) session file(s) saved to $REVIEWER_TRACE_DIR/"
+            fi
         fi
     fi
 

@@ -48,6 +48,8 @@ Both agents use the same Harbor infrastructure (Dockerfiles, instruction templat
 - Claude Code: `ANTHROPIC_API_KEY`
 - Gemini CLI: `GEMINI_API_KEY` or `GOOGLE_API_KEY` (or GCP service account via `GOOGLE_APPLICATION_CREDENTIALS`)
 
+**Self-review:** Each agent reviews its own work. When `REVIEWER_MODE=subagent`, Claude Code uses `claude -p --agent reviewer` and Gemini CLI uses `gemini --yolo --output-format json` with the same reviewer prompt. Both produce structured reviews following the NeurIPS format in `.claude/agents/reviewer.md`.
+
 By default, `run.sh` uses a local patched agent (via `--agent-import-path`) to
 improve reliability without modifying Harbor source code:
 - syncs artifacts to `/logs/agent/artifacts` and `/logs/verifier/artifacts` periodically
@@ -84,12 +86,14 @@ ai_scientist_v3/
 │   ├── instruction.md.template             # Research prompt ({{IDEA_CONTENT}} placeholder)
 │   ├── task.toml                           # Container config (CPU, memory, timeout)
 │   ├── environment/
-│   │   ├── Dockerfile.cpu                  # python:3.12-slim + LaTeX + scikit-learn
-│   │   └── Dockerfile.gpu                  # pytorch + CUDA + LaTeX + scikit-learn
+│   │   ├── Dockerfile.cpu                  # python:3.12-slim + LaTeX + scikit-learn + Claude Code CLI
+│   │   ├── Dockerfile.gpu                  # pytorch + CUDA + LaTeX + scikit-learn + Claude Code CLI
+│   │   └── .gitignore.agent               # Git ignore for agent workspace repos
 │   └── tests/test.sh                       # Verifier (checks artifacts, produces reward)
 ├── scripts/
 │   ├── compile_latex.sh                   # pdflatex + bibtex + chktex
-│   └── submit_for_review.sh              # External review API + versioned snapshot
+│   ├── submit_for_review.sh              # Self-review (Claude/Gemini) or external API + versioned snapshot
+│   └── gitlab_setup.py                   # Create GitLab repos per idea (optional)
 ├── blank_icbinb_latex/                     # ICLR 2025 workshop LaTeX template
 └── docs/                                   # Claude Code documentation reference
 ```
@@ -143,6 +147,22 @@ When `--gpus` is specified:
 
 The agent auto-detects GPU availability inside the container and adjusts experiments accordingly.
 
+### GitLab Integration (Optional)
+
+When `GITLAB_KEY` is set in `.env` (personal access token with `api` scope), agents automatically push their work to GitLab:
+
+- **One repo per idea** — e.g., `findalexli/reink-chart-robustness`
+- **One branch per run** — e.g., `gemini-2026-02-24-22-30`, `claude-2026-02-25-10-00`
+- **Cross-run memory** — agents can `git branch -a` to see previous runs and learn from them
+- **Git pre-initialized** — repo is set up before the agent starts; agent just commits and pushes at milestones
+
+```bash
+# In .env
+GITLAB_KEY=glpat-...   # Personal access token with api scope
+```
+
+Without `GITLAB_KEY`, everything works as before — no git, no push, no GitLab dependency.
+
 ### Viewing Job Results
 
 ```bash
@@ -170,6 +190,7 @@ No hardcoded stages. No tree data structure. No Python orchestration. The agent 
 - `ANTHROPIC_API_KEY` — Required for Claude Code agent
 - `GEMINI_API_KEY` or `GOOGLE_API_KEY` — Required for Gemini CLI agent
 - `S2_API_KEY` (optional) — Semantic Scholar API key for higher rate limits
+- `GITLAB_KEY` (optional) — GitLab personal access token for cross-run agent memory
 - `pdflatex` — Required for paper compilation (MacTeX: `/Library/TeX/texbin/pdflatex`)
 
 ## Documentation

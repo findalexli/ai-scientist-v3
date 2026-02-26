@@ -62,6 +62,17 @@ sync_artifacts() {{
 
 trap 'sync_artifacts' EXIT TERM INT
 
+# --- Git remote + branch setup (if GITLAB_REPO_URL is set) ---
+if [ -n "${{GITLAB_REPO_URL:-}}" ]; then
+    cd /app
+    git remote add origin "$GITLAB_REPO_URL" 2>/dev/null || git remote set-url origin "$GITLAB_REPO_URL"
+    git add -A && git commit -m "Initial workspace" --allow-empty 2>/dev/null || true
+    git checkout -b "${{GITLAB_BRANCH:-main}}" 2>/dev/null || true
+    git fetch origin --no-tags 2>/dev/null || true
+    git push -u origin "${{GITLAB_BRANCH:-main}}" 2>/dev/null || true
+    echo "GitLab: pushed initial commit to branch ${{GITLAB_BRANCH:-main}}"
+fi
+
 (
     while true; do
         sleep {self._artifact_sync_interval_sec}

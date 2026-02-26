@@ -31,6 +31,27 @@ Papers With Code. Clone relevant repos into `experiment_codebase/cloned_repos/` 
 and build on — don't write code from scratch when a reference implementation exists.
 Start by creating `experiment_codebase/README.md` to document your experiment setup.
 
+## Git Repository (Version History)
+
+Your workspace (`/app`) is a git repo connected to GitLab. An initial commit has
+already been made on your branch. **Commit and push after each major milestone** so
+your work is saved remotely and has full version history:
+
+```bash
+cd /app && git add -A && git commit -m "describe what changed" && git push
+```
+
+Good commit points: after literature review, after experiments run, after paper draft,
+after reviewer feedback addressed.
+
+You can also inspect previous runs of this same idea by listing remote branches:
+```bash
+git branch -a
+```
+
+Previous runs (other branches):
+{{GITLAB_BRANCHES}}
+
 ## Artifact Collection
 
 Save artifacts incrementally throughout the run — don't wait until the end. After each major milestone (experiments done, plots done, paper compiled, review received), copy what you have so far:

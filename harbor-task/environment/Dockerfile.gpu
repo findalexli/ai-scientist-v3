@@ -15,6 +15,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Remove the marker so pip/uv can install packages system-wide in the container.
 RUN rm -f /usr/lib/python3.12/EXTERNALLY-MANAGED
 
+# Install Node.js 22.x + Claude Code CLI (used as reviewer subagent,
+# independent of which main agent runtime — Gemini, Codex, etc. — is driving)
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
+    npm install -g @anthropic-ai/claude-code && \
+    rm -rf /var/lib/apt/lists/*
+
 # Install uv for fast, reproducible Python package management
 RUN pip install --no-cache-dir uv
 
@@ -38,6 +45,14 @@ RUN mkdir -p /app/experiment_codebase/baselines /app/experiment_codebase/main \
     /app/figures /app/latex /app/literature /app/submissions && \
     cp -r /app/blank_icbinb_latex/* /app/latex/ && \
     chmod +x /app/scripts/submit_for_review.sh
+
+# Pre-initialize git repo so agent starts with version control ready.
+# Remote + branch are configured at runtime by the patched agent wrapper.
+COPY .gitignore.agent /app/.gitignore
+RUN git config --global user.email "ai-scientist-agent@noreply.gitlab.com" && \
+    git config --global user.name "AI Scientist Agent" && \
+    git config --global init.defaultBranch main && \
+    git init /app
 
 # Copy previous artifacts if resuming (always exists, may be empty)
 COPY prev_artifacts/ /app/prev_artifacts/

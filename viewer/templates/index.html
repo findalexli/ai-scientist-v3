@@ -3,156 +3,253 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Scientist v3 — Job Monitor</title>
+<title>AI Scientist v3 — Job Monitor · @findalexli</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg: #090c10;
-  --surface: #10141a;
-  --surface2: #1c2128;
-  --border: #30363d;
-  --text: #e6edf3;
-  --text-dim: #8b949e;
-  --accent: #58a6ff;
-  --green: #3fb950;
-  --yellow: #d29922;
-  --red: #f85149;
-  --purple: #bc8cff;
+  --bg0: #070b0f;
+  --bg1: #0d1420;
+  --surface: #121b2a;
+  --surface2: #1a2638;
+  --border: #2f4761;
+  --text: #edf4ff;
+  --text-dim: #9eb3cb;
+  --accent: #35c2ff;
+  --accent2: #4ce0b3;
+  --warn: #ffbf69;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-  background: var(--bg);
+  min-height: 100vh;
+  font-family: 'Manrope', sans-serif;
   color: var(--text);
-  line-height: 1.6;
+  background:
+    radial-gradient(1200px 500px at 0% -10%, rgba(53,194,255,0.2), transparent 60%),
+    radial-gradient(900px 460px at 100% 0%, rgba(76,224,179,0.12), transparent 60%),
+    linear-gradient(180deg, var(--bg1), var(--bg0));
 }
-.container { max-width: 1280px; margin: 0 auto; padding: 32px 24px; }
+.container {
+  max-width: 1520px;
+  margin: 0 auto;
+  padding: 26px 18px 34px;
+}
 header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-bottom: 24px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 32px;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(18,27,42,0.95), rgba(18,27,42,0.75));
+  box-shadow: 0 14px 40px rgba(0,0,0,0.35);
 }
-header h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; }
+header h1 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
 header h1 span { color: var(--accent); }
-.refresh-info { color: var(--text-dim); font-size: 14px; background: rgba(139, 148, 158, 0.1); padding: 6px 12px; border-radius: 20px; }
+.title-meta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: 6px;
+}
+.title-meta a {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  text-decoration: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 9px;
+  background: rgba(30,48,70,0.48);
+}
+.title-meta a:hover {
+  border-color: var(--accent);
+  color: #fff;
+}
+.refresh-info {
+  color: var(--text-dim);
+  font-size: 12px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 12px;
+  background: rgba(30,48,70,0.48);
+}
+.help-strip {
+  margin-top: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-dim);
+  font-size: 12px;
+  background: rgba(26,38,56,0.5);
+}
 
-/* Filter tabs */
 .filters {
   display: flex;
-  gap: 12px;
-  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0;
 }
 .filter-btn {
-  background: var(--surface);
   border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(30,48,70,0.54);
   color: var(--text-dim);
-  padding: 8px 16px;
-  border-radius: 8px;
+  padding: 6px 13px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.2s ease;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  transition: all 0.15s ease;
 }
-.filter-btn:hover { border-color: var(--text-dim); color: var(--text); transform: translateY(-1px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-.filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); box-shadow: 0 4px 12px rgba(88, 166, 255, 0.2); }
-.filter-btn .count { opacity: 0.8; margin-left: 6px; font-size: 13px; }
+.filter-btn:hover { border-color: var(--accent); color: #fff; }
+.filter-btn.active {
+  background: rgba(53,194,255,0.22);
+  border-color: var(--accent);
+  color: #fff;
+}
+.filter-btn .count {
+  margin-left: 6px;
+  opacity: 0.84;
+  font-family: 'JetBrains Mono', monospace;
+}
 
-/* Jobs table */
 .jobs-table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  background: var(--surface);
-  border-radius: 12px;
-  overflow: hidden;
   border: 1px solid var(--border);
-  box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+  border-radius: 14px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(18,27,42,0.94), rgba(17,26,40,0.74));
+  box-shadow: 0 10px 30px rgba(0,0,0,0.28);
 }
 .jobs-table th {
   text-align: left;
-  padding: 14px 18px;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
   color: var(--text-dim);
+  padding: 12px 14px;
   border-bottom: 1px solid var(--border);
-  background: var(--surface2);
+  background: rgba(26,38,56,0.65);
   cursor: pointer;
-  user-select: none;
-  transition: color 0.15s;
 }
 .jobs-table th:hover { color: var(--accent); }
 .jobs-table td {
-  padding: 16px 18px;
-  border-bottom: 1px solid var(--border);
-  font-size: 14px;
-  transition: background 0.15s;
+  padding: 13px 14px;
+  border-bottom: 1px solid rgba(47,71,97,0.62);
+  font-size: 13px;
 }
-.jobs-table tr:last-child td { border-bottom: none; }
-.jobs-table tr:hover td { background: rgba(88, 166, 255, 0.08); }
+.jobs-table tr:last-child td { border-bottom: 0; }
 .jobs-table tr { cursor: pointer; }
+.jobs-table tr:hover td { background: rgba(53,194,255,0.08); }
 
-/* Status badges */
 .status {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
-  font-weight: 500;
+  font-weight: 700;
+  text-transform: capitalize;
+  font-size: 12px;
 }
 .status-dot {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
-  display: inline-block;
+  border-radius: 999px;
 }
-.status-running .status-dot { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
-.status-completed .status-dot { background: var(--text-dim); }
-.status-idle .status-dot { background: var(--yellow); }
-.status-unknown .status-dot { background: var(--border); }
+.status-running .status-dot { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); animation: pulse 1.8s infinite; }
+.status-completed .status-dot { background: #8aa0ba; }
+.status-idle .status-dot { background: var(--warn); }
+.status-unknown .status-dot { background: #5a708a; }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  50% { opacity: 0.35; }
 }
 
 .model-badge {
-  background: rgba(188, 140, 255, 0.15);
-  color: var(--purple);
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
+  background: rgba(53,194,255,0.18);
+  color: var(--accent);
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
 }
-.tokens-cell { font-family: 'SF Mono', SFMono-Regular, Consolas, monospace; font-size: 13px; }
-.cost-cell { color: var(--yellow); font-family: 'SF Mono', SFMono-Regular, Consolas, monospace; font-size: 13px; }
-.task-name { color: var(--text-dim); font-size: 13px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.submissions-badge {
-  background: rgba(63, 185, 80, 0.15);
-  color: var(--green);
-  padding: 2px 8px;
-  border-radius: 4px;
+.tokens-cell, .cost-cell, .duration-cell {
+  font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
+}
+.cost-cell { color: var(--warn); }
+.duration-cell { color: var(--text-dim); white-space: nowrap; }
+.task-name {
+  color: var(--text-dim);
+  max-width: 440px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.submissions-badge {
+  background: rgba(76,224,179,0.18);
+  color: var(--accent2);
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 700;
 }
 
-.empty-state {
+.loading, .empty-state {
   text-align: center;
-  padding: 60px 20px;
   color: var(--text-dim);
+  padding: 26px;
 }
-.loading { text-align: center; padding: 40px; color: var(--text-dim); }
+
+@media (max-width: 900px) {
+  header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .refresh-info {
+    align-self: stretch;
+    text-align: center;
+  }
+  .jobs-table th:nth-child(8),
+  .jobs-table td:nth-child(8) {
+    display: none;
+  }
+}
+
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-thumb { background: #385470; border-radius: 999px; }
 </style>
 </head>
 <body>
 <div class="container">
   <header>
-    <h1>AI Scientist v3 — <span>Job Monitor</span></h1>
+    <h1>
+      AI Scientist v3 <span>Job Monitor</span>
+      <span class="title-meta">
+        <a href="https://github.com/findalexli/ai-scientist-v3" target="_blank" rel="noopener noreferrer">Repo</a>
+        <a href="https://github.com/findalexli" target="_blank" rel="noopener noreferrer">@findalexli</a>
+      </span>
+    </h1>
     <div class="refresh-info" id="refresh-info">Loading...</div>
   </header>
+  <div class="help-strip">Job: one full run. Trajectory: the event stream from that run. Submission: a saved paper version with its review and rebuttal.</div>
 
   <div class="filters" id="filters"></div>
 
@@ -162,6 +259,7 @@ header h1 span { color: var(--accent); }
         <th data-sort="status">Status</th>
         <th data-sort="id">Job</th>
         <th data-sort="model">Model</th>
+        <th data-sort="duration">Duration</th>
         <th data-sort="tokens">Tokens</th>
         <th data-sort="cost">Cost</th>
         <th data-sort="submissions">Submissions</th>
@@ -169,7 +267,7 @@ header h1 span { color: var(--accent); }
       </tr>
     </thead>
     <tbody id="jobs-body">
-      <tr><td colspan="7" class="loading">Loading jobs...</td></tr>
+      <tr><td colspan="8" class="loading">Loading jobs...</td></tr>
     </tbody>
   </table>
 </div>
@@ -179,6 +277,7 @@ let allJobs = [];
 let currentFilter = 'all';
 let sortKey = 'id';
 let sortAsc = false;
+let hideDateOnlyJobs = true;
 
 function formatTokens(n) {
   if (!n) return '-';
@@ -187,26 +286,62 @@ function formatTokens(n) {
   return String(n);
 }
 
+function formatDuration(seconds) {
+  if (seconds === null || seconds === undefined) return '-';
+  const s = Math.max(0, Math.floor(Number(seconds) || 0));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const ss = s % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${ss}s`;
+  return `${ss}s`;
+}
+
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function isDateOnlyJobId(jobId) {
+  return /^\d{4}-\d{2}-\d{2}__\d{2}-\d{2}-\d{2}$/.test(String(jobId || ''));
+}
+
+function getVisibleJobs() {
+  if (!hideDateOnlyJobs) return [...allJobs];
+  return allJobs.filter(j => !isDateOnlyJobId(j.id));
+}
+
 function renderFilters() {
-  const counts = { all: allJobs.length, running: 0, completed: 0, idle: 0 };
-  allJobs.forEach(j => { counts[j.status] = (counts[j.status] || 0) + 1; });
+  const visibleJobs = getVisibleJobs();
+  const counts = { all: visibleJobs.length, running: 0, completed: 0, idle: 0, unknown: 0 };
+  visibleJobs.forEach(j => { counts[j.status] = (counts[j.status] || 0) + 1; });
 
   const filtersEl = document.getElementById('filters');
   filtersEl.innerHTML = '';
-  ['all', 'running', 'completed', 'idle'].forEach(f => {
+  ['all', 'running', 'completed', 'idle', 'unknown'].forEach(f => {
     if (f !== 'all' && !counts[f]) return;
     const btn = document.createElement('button');
     btn.className = 'filter-btn' + (currentFilter === f ? ' active' : '');
-    btn.innerHTML = `${f.charAt(0).toUpperCase() + f.slice(1)}<span class="count">(${counts[f] || 0})</span>`;
+    btn.innerHTML = `${f.charAt(0).toUpperCase() + f.slice(1)}<span class="count">${counts[f] || 0}</span>`;
     btn.onclick = () => { currentFilter = f; renderFilters(); renderTable(); };
     filtersEl.appendChild(btn);
   });
+
+  const toggle = document.createElement('button');
+  toggle.className = 'filter-btn' + (hideDateOnlyJobs ? ' active' : '');
+  toggle.textContent = hideDateOnlyJobs ? 'Date-only Hidden' : 'Date-only Visible';
+  toggle.onclick = () => {
+    hideDateOnlyJobs = !hideDateOnlyJobs;
+    renderFilters();
+    renderTable();
+  };
+  filtersEl.appendChild(toggle);
 }
 
 function renderTable() {
-  let jobs = currentFilter === 'all' ? allJobs : allJobs.filter(j => j.status === currentFilter);
+  const visibleJobs = getVisibleJobs();
+  let jobs = currentFilter === 'all' ? [...visibleJobs] : visibleJobs.filter(j => j.status === currentFilter);
 
-  // Sort
   jobs.sort((a, b) => {
     let va, vb;
     switch (sortKey) {
@@ -219,10 +354,16 @@ function renderTable() {
         vb = b.tokens?.estimated_cost_usd || 0;
         break;
       case 'submissions':
-        va = a.submissions; vb = b.submissions;
+        va = a.submissions || 0;
+        vb = b.submissions || 0;
+        break;
+      case 'duration':
+        va = a.duration_seconds || 0;
+        vb = b.duration_seconds || 0;
         break;
       default:
-        va = a[sortKey] || ''; vb = b[sortKey] || '';
+        va = a[sortKey] || '';
+        vb = b[sortKey] || '';
     }
     if (va < vb) return sortAsc ? -1 : 1;
     if (va > vb) return sortAsc ? 1 : -1;
@@ -231,24 +372,25 @@ function renderTable() {
 
   const tbody = document.getElementById('jobs-body');
   if (!jobs.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No jobs found</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No jobs found.</td></tr>';
     return;
   }
 
   tbody.innerHTML = jobs.map(j => `
-    <tr onclick="window.location='/job/${j.id}'">
+    <tr onclick="window.location='/job/${encodeURIComponent(j.id)}'">
       <td>
-        <span class="status status-${j.status}">
+        <span class="status status-${escHtml(j.status)}">
           <span class="status-dot"></span>
-          ${j.status}
+          ${escHtml(j.status)}
         </span>
       </td>
-      <td>${j.id}</td>
-      <td><span class="model-badge">${j.model}</span></td>
+      <td>${escHtml(j.id)}</td>
+      <td><span class="model-badge">${escHtml(j.model || 'unknown')}</span></td>
+      <td class="duration-cell">${formatDuration(j.duration_seconds)}</td>
       <td class="tokens-cell">${formatTokens(j.tokens?.total_tokens)}</td>
-      <td class="cost-cell">${j.tokens?.estimated_cost_usd ? '$' + j.tokens.estimated_cost_usd.toFixed(2) : '-'}</td>
+      <td class="cost-cell">${j.tokens?.estimated_cost_usd ? '$' + Number(j.tokens.estimated_cost_usd).toFixed(2) : '-'}</td>
       <td>${j.submissions ? '<span class="submissions-badge">v' + j.submissions + '</span>' : '-'}</td>
-      <td class="task-name" title="${(j.task_name || '').replace(/"/g, '&quot;')}">${j.task_name || '-'}</td>
+      <td class="task-name" title="${escHtml(j.task_name || '')}">${escHtml(j.task_name || '-')}</td>
     </tr>
   `).join('');
 }
@@ -260,14 +402,13 @@ async function fetchJobs() {
     renderFilters();
     renderTable();
     document.getElementById('refresh-info').textContent =
-      `${allJobs.length} jobs | Updated ${new Date().toLocaleTimeString()}`;
+      `${allJobs.length} jobs • updated ${new Date().toLocaleTimeString()}`;
   } catch (e) {
     document.getElementById('jobs-body').innerHTML =
-      '<tr><td colspan="7" class="empty-state">Error loading jobs</td></tr>';
+      '<tr><td colspan="8" class="empty-state">Error loading jobs.</td></tr>';
   }
 }
 
-// Sort headers
 document.querySelectorAll('.jobs-table th[data-sort]').forEach(th => {
   th.addEventListener('click', () => {
     const key = th.dataset.sort;
@@ -277,7 +418,6 @@ document.querySelectorAll('.jobs-table th[data-sort]').forEach(th => {
   });
 });
 
-// Initial load + auto-refresh
 fetchJobs();
 setInterval(fetchJobs, 10000);
 </script>

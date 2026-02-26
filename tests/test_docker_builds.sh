@@ -53,6 +53,9 @@ cp -r "$REPO_ROOT/.claude" "$BUILD_CTX/.claude"
 mkdir -p "$BUILD_CTX/prev_artifacts"
 touch "$BUILD_CTX/prev_artifacts/.keep"
 
+# Copy .gitignore.agent (used by Dockerfile COPY .gitignore.agent)
+cp "$REPO_ROOT/harbor-task/environment/.gitignore.agent" "$BUILD_CTX/.gitignore.agent"
+
 # Copy docker-compose.yaml so context is complete (not used by build, but
 # keeps the directory structure identical to what run.sh stages)
 cp "$REPO_ROOT/harbor-task/environment/docker-compose.yaml" "$BUILD_CTX/" 2>/dev/null || true
@@ -93,7 +96,27 @@ else
 fi
 
 # ===========================================================================
-section "5. Build GPU image"
+section "5. CPU image: Claude Code CLI installed"
+# ===========================================================================
+
+if docker run --rm "$CPU_IMAGE" claude --version 2>/dev/null | grep -q "."; then
+    pass "CPU image: claude CLI is installed ($(docker run --rm "$CPU_IMAGE" claude --version 2>/dev/null | head -1))"
+else
+    fail "CPU image: claude CLI not found"
+fi
+
+# ===========================================================================
+section "6. CPU image: git repo pre-initialized"
+# ===========================================================================
+
+if docker run --rm "$CPU_IMAGE" bash -c "cd /app && git status && test -f .gitignore" 2>/dev/null | grep -q "On branch"; then
+    pass "CPU image: /app is a git repo with .gitignore"
+else
+    fail "CPU image: git repo not initialized in /app"
+fi
+
+# ===========================================================================
+section "7. Build GPU image"
 # ===========================================================================
 
 if docker build -q -f "$BUILD_CTX/Dockerfile.gpu" -t "$GPU_IMAGE" "$BUILD_CTX" > /dev/null 2>&1; then
@@ -103,7 +126,7 @@ else
 fi
 
 # ===========================================================================
-section "6. GPU image: PyTorch + core packages import"
+section "7. GPU image: PyTorch + core packages import"
 # ===========================================================================
 
 if docker run --rm "$GPU_IMAGE" python3 -c "
@@ -117,7 +140,7 @@ else
 fi
 
 # ===========================================================================
-section "7. GPU image: uv installed"
+section "8. GPU image: uv installed"
 # ===========================================================================
 
 if docker run --rm "$GPU_IMAGE" uv --version 2>/dev/null | grep -q "uv"; then
@@ -127,7 +150,27 @@ else
 fi
 
 # ===========================================================================
-section "8. GPU image: uv pip install --system works"
+section "9. GPU image: Claude Code CLI installed"
+# ===========================================================================
+
+if docker run --rm "$GPU_IMAGE" claude --version 2>/dev/null | grep -q "."; then
+    pass "GPU image: claude CLI is installed ($(docker run --rm "$GPU_IMAGE" claude --version 2>/dev/null | head -1))"
+else
+    fail "GPU image: claude CLI not found"
+fi
+
+# ===========================================================================
+section "10. GPU image: git repo pre-initialized"
+# ===========================================================================
+
+if docker run --rm "$GPU_IMAGE" bash -c "cd /app && git status && test -f .gitignore" 2>/dev/null | grep -q "On branch"; then
+    pass "GPU image: /app is a git repo with .gitignore"
+else
+    fail "GPU image: git repo not initialized in /app"
+fi
+
+# ===========================================================================
+section "11. GPU image: uv pip install --system works"
 # ===========================================================================
 
 # This catches PEP 668 / EXTERNALLY-MANAGED regressions
@@ -138,7 +181,7 @@ else
 fi
 
 # ===========================================================================
-section "9. GPU patch: patch_docker_py() on new-format Harbor"
+section "12. GPU patch: patch_docker_py() on new-format Harbor"
 # ===========================================================================
 
 # Create a mock docker.py that uses the new Harbor format (imported constants)
@@ -195,7 +238,7 @@ else
 fi
 
 # ===========================================================================
-section "10. GPU patch: patch_docker_py() on old-format Harbor"
+section "13. GPU patch: patch_docker_py() on old-format Harbor"
 # ===========================================================================
 
 cat > "$MOCK_DIR/docker.py" <<'MOCK_DOCKER_PY'
@@ -245,7 +288,7 @@ else
 fi
 
 # ===========================================================================
-section "11. GPU patch: is_patched() rejects incomplete patch"
+section "14. GPU patch: is_patched() rejects incomplete patch"
 # ===========================================================================
 
 # A file that has the USAGE of _DOCKER_COMPOSE_GPU_PATH but not the DEFINITION
@@ -284,7 +327,7 @@ else
 fi
 
 # ===========================================================================
-section "12. GPU patch: create_gpu_compose() output"
+section "15. GPU patch: create_gpu_compose() output"
 # ===========================================================================
 
 COMPOSE_OUTPUT=$(cd "$REPO_ROOT" && python3 -c "
