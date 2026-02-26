@@ -191,8 +191,8 @@ class GitLabClient:
             for branch_info in branches:
                 branch = branch_info["name"]
                 meta = self.get_metadata(project_id, branch)
-                if not meta:
-                    continue
+                if not meta or not meta.get("job_id"):
+                    continue  # Skip branches without valid metadata.
 
                 job_id = meta.get("job_id", "")
                 model = meta.get("model", "unknown")
