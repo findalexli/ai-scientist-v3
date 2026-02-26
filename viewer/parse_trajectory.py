@@ -378,10 +378,16 @@ def parse_atif_trajectory(path: str, after_line: int = 0) -> ParseResult:
         ts = step.get("timestamp")
         token_info = _extract_tokens_from_metrics(step.get("metrics", {}))
 
-        # Override output_tokens with content-based estimate when the reported
-        # value is suspiciously low.  ATIF drops thinking content
-        # (reasoning_content is empty), so completion_tokens under-counts.
+        # Fix output_tokens: ATIF reasoning_content is often empty (thinking
+        # text is dropped), so completion_tokens may under-count.
+        # However, Gemini's metrics.extra.thoughts_tokens reports thinking
+        # tokens accurately, and completion_tokens already includes them.
+        # Strategy: estimate from visible content + thoughts_tokens, take max.
         if source == "agent":
+            metrics = step.get("metrics", {}) if isinstance(step.get("metrics"), dict) else {}
+            extra = metrics.get("extra", {}) if isinstance(metrics.get("extra"), dict) else {}
+            thoughts_tokens = extra.get("thoughts_tokens", 0) or 0
+
             content_chars = 0
             msg_text = step.get("message", "")
             if isinstance(msg_text, str):
@@ -394,7 +400,9 @@ def parse_atif_trajectory(path: str, after_line: int = 0) -> ParseResult:
                     args = tc.get("arguments", {})
                     content_chars += len(json.dumps(args, ensure_ascii=False) if isinstance(args, dict) else str(args))
                     content_chars += len(tc.get("function_name", ""))
-            estimated = _estimate_tokens_from_chars(content_chars)
+            visible_estimated = _estimate_tokens_from_chars(content_chars)
+            # Best estimate = visible content tokens + thinking tokens.
+            estimated = visible_estimated + thoughts_tokens
             if estimated > token_info.output_tokens:
                 token_info.output_tokens = estimated
 

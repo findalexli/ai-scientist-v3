@@ -670,6 +670,7 @@ body {
     <h1 id="job-title">{{JOB_ID}}</h1>
     <span class="status-badge" id="status-badge">...</span>
     <span class="model-badge" id="model-badge">...</span>
+    <a id="gitlab-link" href="#" target="_blank" rel="noopener" style="display:none; margin-left:8px; font-size:12px; color:#fc6d26; text-decoration:none; border:1px solid rgba(252,109,38,0.3); border-radius:999px; padding:4px 10px;">GitLab</a>
     <div class="header-stats">
       <div class="stat"><span class="val" id="stat-events">-</span>events</div>
       <div class="stat"><span class="val" id="stat-tokens">-</span>tokens</div>
@@ -1465,6 +1466,11 @@ async function loadInitialData() {
       }
       isLive = metaData.status === 'running';
       document.getElementById('stat-subs').textContent = metaData.submissions || 0;
+      if (metaData.gitlab_url) {
+        const glLink = document.getElementById('gitlab-link');
+        glLink.href = metaData.gitlab_url;
+        glLink.style.display = 'inline-block';
+      }
     } else {
       document.getElementById('status-badge').className = 'status-badge unknown';
       document.getElementById('status-badge').textContent = 'unknown';

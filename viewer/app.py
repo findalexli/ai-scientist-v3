@@ -803,18 +803,32 @@ async def api_job_meta(job_id: str):
             if "/" in model:
                 model = model.split("/")[-1]
             model = model.replace("claude-", "")
+            # Build GitLab web URL for this branch.
+            gitlab_url = None
+            for repo in (GITLAB_CLIENT.list_repos() or []):
+                if repo["id"] == project_id:
+                    gitlab_url = f"{repo['web_url']}/-/tree/{branch}"
+                    break
             return JSONResponse({
                 "id": job_id,
                 "status": gl_meta.get("status", "completed"),
                 "duration_seconds": gl_meta.get("duration_seconds"),
                 "model": model,
                 "submissions": gl_meta.get("submission_count", 0),
+                "gitlab_url": gitlab_url,
             })
 
     # Fallback to local disk.
     meta = discover_job_meta(job_id)
     if not meta:
         return JSONResponse({"error": "Job not found"}, status_code=404)
+    # Still try to provide a GitLab link if the job is mapped.
+    if _is_gitlab_backed(job_id) and GITLAB_CLIENT:
+        project_id, branch = GITLAB_JOB_MAP[job_id]
+        for repo in (GITLAB_CLIENT.list_repos() or []):
+            if repo["id"] == project_id:
+                meta["gitlab_url"] = f"{repo['web_url']}/-/tree/{branch}"
+                break
     return JSONResponse(mask_secrets(meta))
 
 
