@@ -400,6 +400,63 @@ def _git_push_inner(
     return True
 
 
+def _find_matching_branch(
+    existing_branches: List[str], agent_short: str, ts_raw: str
+) -> Optional[str]:
+    """Find the best matching existing branch for this job.
+
+    Branch naming from gitlab_setup.py: {agent_short}-YYYY-MM-DD-HH-MM
+    Job dir timestamp: YYYY-MM-DD-HH-MM-SS
+
+    The agent creates the branch when it starts running, which may differ
+    from the job creation time. We match by agent prefix and find the
+    closest timestamp within a reasonable window (4 hours).
+    """
+    if not existing_branches or not ts_raw:
+        return None
+
+    prefix = f"{agent_short}-"
+    candidates = [b for b in existing_branches if b.startswith(prefix) and b != "main"]
+    if not candidates:
+        return None
+
+    # Parse job timestamp.
+    ts_parts = ts_raw.split("-")  # YYYY-MM-DD-HH-MM-SS
+    if len(ts_parts) < 5:
+        return None
+    try:
+        job_dt = datetime(
+            int(ts_parts[0]), int(ts_parts[1]), int(ts_parts[2]),
+            int(ts_parts[3]), int(ts_parts[4]),
+            int(ts_parts[5]) if len(ts_parts) > 5 else 0,
+        )
+    except (ValueError, IndexError):
+        return None
+
+    best_branch = None
+    best_delta = None
+    for b in candidates:
+        # Parse branch timestamp: {agent}-YYYY-MM-DD-HH-MM
+        b_ts = b[len(prefix):]
+        b_parts = b_ts.split("-")
+        if len(b_parts) < 5:
+            continue
+        try:
+            b_dt = datetime(
+                int(b_parts[0]), int(b_parts[1]), int(b_parts[2]),
+                int(b_parts[3]), int(b_parts[4]),
+            )
+        except (ValueError, IndexError):
+            continue
+        delta = abs((b_dt - job_dt).total_seconds())
+        # Must be within 4 hours (agent may start much later than job creation).
+        if delta <= 4 * 3600 and (best_delta is None or delta < best_delta):
+            best_delta = delta
+            best_branch = b
+
+    return best_branch
+
+
 def _remove_oversized_blobs(work_dir: str, max_mb: int = 90) -> None:
     """Remove files larger than max_mb from the working directory to avoid push limits."""
     max_bytes = max_mb * 1024 * 1024
@@ -443,21 +500,37 @@ def push_job(job_dir: str, dry_run: bool = False) -> dict:
     result_data = read_json(os.path.join(job_dir, "result.json"))
     agent_type = detect_agent_type(config)
     agent_short = agent_type.replace("-cli", "").replace("-code", "")
-
-    # Format timestamp for branch name: YYYY-MM-DD-HH-MM.
-    ts_formatted = ts_raw  # Already YYYY-MM-DD-HH-MM-SS from parse_job_id
-    if ts_formatted:
-        # Convert to the gitlab_setup format: YYYY-MM-DD-HH-MM
-        parts = ts_formatted.split("-")
-        if len(parts) >= 5:
-            ts_formatted = "-".join(parts[:5])  # Drop seconds
-
-    branch = f"{agent_short}-{ts_formatted}"
     repo_name = idea_stem.replace("_", "-")
 
     token = os.environ.get("GITLAB_KEY", "")
     if not token:
         return {"job": job_name, "status": "error", "reason": "GITLAB_KEY not set"}
+
+    # Resolve branch: prefer matching an existing GitLab branch over creating a new one.
+    # The agent creates branches using datetime.now() at runtime, which differs from the
+    # job directory timestamp. We match by agent prefix + closest timestamp.
+    ts_formatted = ts_raw  # YYYY-MM-DD-HH-MM-SS from parse_job_id
+    if ts_formatted:
+        parts = ts_formatted.split("-")
+        if len(parts) >= 5:
+            ts_formatted = "-".join(parts[:5])  # Drop seconds
+    computed_branch = f"{agent_short}-{ts_formatted}"
+
+    branch = computed_branch
+    username = None
+    project = None
+    try:
+        username = get_username(token)
+        project = ensure_repo(token, username, repo_name)
+        project_id = project["id"]
+        existing_branches = list_branches(token, project_id)
+        matched = _find_matching_branch(existing_branches, agent_short, ts_raw)
+        if matched:
+            branch = matched
+            if matched != computed_branch:
+                print(f"  Matched existing branch: {matched} (instead of {computed_branch})")
+    except Exception:
+        pass  # Fall back to computed branch name.
 
     print(f"Processing {job_name}...")
     print(f"  Repo: {repo_name}, Branch: {branch}")
@@ -500,16 +573,17 @@ def push_job(job_dir: str, dry_run: bool = False) -> dict:
 
         return {"job": job_name, "status": "dry_run", "branch": branch, "files": staged}
 
-    # Real push.
-    try:
-        username = get_username(token)
-    except Exception as e:
-        return {"job": job_name, "status": "error", "reason": f"GitLab auth failed: {e}"}
-
-    try:
-        project = ensure_repo(token, username, repo_name)
-    except Exception as e:
-        return {"job": job_name, "status": "error", "reason": f"Repo creation failed: {e}"}
+    # Real push — reuse username/project from branch resolution above.
+    if not username:
+        try:
+            username = get_username(token)
+        except Exception as e:
+            return {"job": job_name, "status": "error", "reason": f"GitLab auth failed: {e}"}
+    if not project:
+        try:
+            project = ensure_repo(token, username, repo_name)
+        except Exception as e:
+            return {"job": job_name, "status": "error", "reason": f"Repo creation failed: {e}"}
 
     repo_url = f"https://oauth2:{token}@gitlab.com/{username}/{repo_name}.git"
     web_url = project.get("web_url", f"https://gitlab.com/{username}/{repo_name}")
