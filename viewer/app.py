@@ -47,7 +47,7 @@ JOBS_LIST_CACHE: Dict[str, Any] = {
     "expires_at": 0.0,
     "payload": None,
 }
-JOBS_LIST_CACHE_TTL_SEC = 3.0
+JOBS_LIST_CACHE_TTL_SEC = 15.0
 
 # GitLab client — initialized if GITLAB_KEY is set.
 GITLAB_CLIENT: Optional[GitLabClient] = None
@@ -596,8 +596,47 @@ def discover_jobs() -> list:
         job_entries.append((name, job_dir, mtime))
     job_entries.sort(key=lambda x: x[2], reverse=True)
 
+    # Pre-fetch all GitLab metadata in parallel to avoid sequential API calls.
+    gl_entries = [(name, job_dir) for name, job_dir, _ in job_entries if _is_gitlab_backed(name)]
+    gl_data: Dict[str, Tuple[Optional[dict], Optional[dict]]] = {}
+    if gl_entries and GITLAB_CLIENT:
+        from concurrent.futures import ThreadPoolExecutor
+
+        def _fetch_gl(name):
+            pid, branch = GITLAB_JOB_MAP[name]
+            meta = GITLAB_CLIENT.get_metadata(pid, branch)
+            summary = GITLAB_CLIENT.get_trajectory_summary(pid, branch)
+            return name, meta, summary
+
+        with ThreadPoolExecutor(max_workers=min(10, len(gl_entries))) as pool:
+            for result_name, meta, summary in pool.map(_fetch_gl, [n for n, _ in gl_entries]):
+                gl_data[result_name] = (meta, summary)
+
     for idx, (name, job_dir, _) in enumerate(job_entries):
 
+        # Fast path: for GitLab-backed completed jobs, skip ALL local disk I/O.
+        if name in gl_data:
+            gl_meta, gl_summary = gl_data[name]
+            if gl_meta and gl_meta.get("job_id"):
+                gl_model = gl_meta.get("model", "unknown")
+                if "/" in gl_model:
+                    gl_model = gl_model.split("/")[-1]
+                gl_model = gl_model.replace("claude-", "")
+                jobs.append({
+                    "id": name,
+                    "dir": job_dir,
+                    "status": gl_meta.get("status", "completed"),
+                    "duration_seconds": gl_meta.get("duration_seconds"),
+                    "model": gl_model,
+                    "line_count": gl_summary.get("total_lines", 0) if gl_summary else 0,
+                    "file_size_mb": 0,
+                    "submissions": gl_meta.get("submission_count", 0),
+                    "tokens": gl_summary.get("cost") if gl_summary else None,
+                    "task_name": gl_meta.get("idea_name", name).replace("_", " ").title(),
+                })
+                continue  # Skip all local disk I/O for this job.
+
+        # Slow path: local disk I/O for jobs not on GitLab (running, legacy, etc.)
         config = read_config(job_dir)
         status = get_job_status(job_dir)
         duration_seconds = get_job_duration_seconds(job_dir, status)
@@ -620,7 +659,11 @@ def discover_jobs() -> list:
             task_name = cached.get("task_name", task_name)
             parsed_model = cached.get("parsed_model")
         else:
-            should_parse_detail = (status == "running") or (idx < 8)
+            # Only parse trajectories for running jobs on the dashboard.
+            # Completed jobs get their metrics from the job detail page or GitLab.
+            # The old heuristic (idx < 8) parsed massive files (100MB+) for
+            # completed jobs that happened to be recent, causing multi-second loads.
+            should_parse_detail = status == "running"
             if should_parse_detail:
                 result = load_job_events(job_dir)
                 if result.events:
@@ -634,10 +677,10 @@ def discover_jobs() -> list:
                             break
 
             if activity_path and not line_count and not activity_path.endswith("trajectory.json"):
-                # For lightweight rows, keep an approximate count from the raw file.
+                # Approximate line count from file size instead of reading the
+                # entire file (claude-code.txt can be 150MB+).
                 try:
-                    with open(activity_path, "r", errors="replace") as f:
-                        line_count = sum(1 for _ in f)
+                    line_count = max(1, os.path.getsize(activity_path) // 500)
                 except OSError:
                     pass
 
@@ -653,19 +696,8 @@ def discover_jobs() -> list:
         if model_name == "unknown" and parsed_model:
             model_name = str(parsed_model).split("/")[-1].replace("claude-", "")
 
-        # For completed jobs that are GitLab-backed, use pre-computed metrics
-        # to avoid expensive trajectory re-parsing.
-        if _is_gitlab_backed(name) and status != "running":
-            project_id, branch = GITLAB_JOB_MAP[name]
-            gl_summary = GITLAB_CLIENT.get_trajectory_summary(project_id, branch)
-            gl_meta = GITLAB_CLIENT.get_metadata(project_id, branch)
-            if gl_summary and gl_meta:
-                token_summary = gl_summary.get("cost")
-                line_count = gl_summary.get("total_lines", 0)
-                if model_name == "unknown":
-                    gl_model = gl_meta.get("model", "")
-                    if gl_model:
-                        model_name = gl_model.split("/")[-1].replace("claude-", "")
+        # Defer submission count for non-running jobs (disk I/O per job).
+        sub_count = get_submission_count(job_dir) if status == "running" else 0
 
         jobs.append({
             "id": name,
@@ -675,7 +707,7 @@ def discover_jobs() -> list:
             "model": model_name,
             "line_count": line_count,
             "file_size_mb": round(file_size / 1_000_000, 1),
-            "submissions": get_submission_count(job_dir),
+            "submissions": sub_count,
             "tokens": token_summary,
             "task_name": mask_secrets_in_text(task_name),
         })
@@ -918,17 +950,26 @@ async def api_submissions(job_id: str):
         project_id, branch = gl
         vlog = GITLAB_CLIENT.get_file_json(project_id, branch, "reviewer_trace/version_log.json")
         if vlog and vlog.get("versions"):
+            versions = vlog["versions"]
+
+            # Fetch all response.md files in parallel to avoid N sequential API calls.
+            from concurrent.futures import ThreadPoolExecutor
+            def _fetch_response(vdir):
+                if not vdir:
+                    return None
+                data = GITLAB_CLIENT.get_file_raw(project_id, branch, f"reviewer_trace/{vdir}/response.md")
+                return data.decode("utf-8", errors="replace") if data else None
+
+            with ThreadPoolExecutor(max_workers=min(8, len(versions))) as pool:
+                resp_texts = list(pool.map(_fetch_response, [v.get("directory", "") for v in versions]))
+
             submissions = []
-            for v in vlog["versions"]:
+            for v, resp_text in zip(versions, resp_texts):
                 vdir = v.get("directory", "")
-                resp_path = f"reviewer_trace/{vdir}/response.md" if vdir else None
                 review_md = ""
                 rebuttal_md = None
-                if resp_path:
-                    resp_data = GITLAB_CLIENT.get_file_raw(project_id, branch, resp_path)
-                    if resp_data:
-                        resp_text = resp_data.decode("utf-8", errors="replace")
-                        review_md, rebuttal_md = _split_review_rebuttal(resp_text)
+                if resp_text:
+                    review_md, rebuttal_md = _split_review_rebuttal(resp_text)
                 submissions.append({
                     "version": v.get("version"),
                     "timestamp": v.get("timestamp"),
