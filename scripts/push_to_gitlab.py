@@ -189,6 +189,12 @@ def generate_trajectory_summary(
         "tool_breakdown": tool_bkd,
         "event_type_breakdown": event_bkd,
         "cumulative_tokens": cumulative,
+        "_note": (
+            "output_tokens is a lower bound. Claude Code JSONL logs per-block "
+            "streaming deltas (1-19 tokens) from message_start, not final totals. "
+            "ATIF drops thinking content (reasoning_content is empty). "
+            "Accurate output tokens require estimating from actual JSONL content."
+        ),
     }
 
 

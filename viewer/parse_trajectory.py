@@ -743,7 +743,17 @@ def compute_event_type_breakdown(events: list) -> list:
 
 
 def estimate_cost(events: list, model: str = "claude-opus-4-6") -> dict:
-    """Estimate cost based on token usage and model pricing."""
+    """Estimate cost based on token usage and model pricing.
+
+    NOTE on output_tokens accuracy:
+    - Claude Code JSONL: output_tokens comes from per-block streaming deltas in
+      message_start events (1-19 tokens each), NOT the final cumulative total.
+      This significantly under-counts real output.
+    - ATIF trajectory: reasoning_content is empty (thinking content is dropped),
+      so output tokens from thinking are not captured.
+    - For accurate output token counts, the real content in the JSONL must be
+      used to estimate tokens. The values here are lower bounds.
+    """
     # Pricing per million tokens (USD) — updated Feb 2026
     # Cache read = 0.1x input, cache write (5min) = 1.25x input
     pricing = {
