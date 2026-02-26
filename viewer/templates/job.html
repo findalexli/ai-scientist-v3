@@ -1114,19 +1114,28 @@ function createEventEl(ev) {
       <span class="event-summary" title="${escHtml(ev.summary)}">${escHtml(ev.summary)}</span>
       ${tokensHtml}
     </div>
-    ${ev.detail ? `<div class="event-detail">${escHtml(ev.detail)}</div>` : ''}
   `;
 
   div.addEventListener('click', () => {
-    if (selectedEvent && selectedEvent !== div) selectedEvent.classList.remove('selected');
+    if (selectedEvent && selectedEvent !== div) {
+      selectedEvent.classList.remove('selected');
+      selectedEvent.classList.remove('expanded');
+    }
     if (selectedEvent === div) {
       div.classList.remove('selected');
-      if (ev.detail) div.classList.remove('expanded');
+      div.classList.remove('expanded');
       selectedEvent = null;
       return;
     }
     div.classList.add('selected');
-    if (ev.detail) div.classList.toggle('expanded');
+    // Lazy-load detail on first click.
+    if (ev.detail && !div.querySelector('.event-detail')) {
+      const detailEl = document.createElement('div');
+      detailEl.className = 'event-detail';
+      detailEl.textContent = ev.detail;
+      div.appendChild(detailEl);
+    }
+    if (ev.detail) div.classList.add('expanded');
     selectedEvent = div;
   });
 
