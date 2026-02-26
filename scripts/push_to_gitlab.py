@@ -379,6 +379,14 @@ def _git_push_inner(
     run_git("config", "user.email", "ai-scientist@noreply.local")
     run_git("config", "user.name", "AI Scientist")
 
+    # Enable LFS for large files (trajectory.json can be 10-50MB+).
+    _has_lfs = shutil.which("git-lfs") is not None
+    if _has_lfs:
+        run_git("lfs", "install", "--local", check=False)
+        # Track large JSON and JSONL files via LFS.
+        run_git("lfs", "track", "agent_trace/trajectory.json", check=False)
+        run_git("lfs", "track", "reviewer_trace/*/trace/*.jsonl", check=False)
+
     # Copy staged artifacts into the working directory.
     for root, dirs, files in os.walk(staging):
         for fname in files:
@@ -399,11 +407,51 @@ def _git_push_inner(
     run_git("commit", "-m", f"Add agent_trace + reviewer_trace for {job_name}")
 
     result = run_git("push", "-u", "origin", branch, check=False)
-    if result.returncode != 0:
-        print(f"  Push failed: {result.stderr}", file=sys.stderr)
-        return False
+    if result.returncode == 0:
+        return True
 
-    return True
+    # If push failed due to oversized blobs in git history, retry with LFS migrate
+    # or fall back to a clean orphan branch.
+    if "exceed" in result.stderr and "limit" in result.stderr:
+        print(f"  Push blocked by oversized blobs, retrying as orphan branch...")
+        # Create a fresh orphan branch with our files only (no history blobs).
+        orphan_dir = tempfile.mkdtemp(prefix="gitlab-orphan-")
+        try:
+            def run_orphan(*args, **kw):
+                return subprocess.run(
+                    ["git"] + list(args), cwd=orphan_dir,
+                    capture_output=True, text=True, env=env, timeout=180,
+                    check=kw.get("check", True),
+                )
+            run_orphan("init")
+            run_orphan("checkout", "-b", branch, check=False)
+            run_orphan("config", "user.email", "ai-scientist@noreply.local")
+            run_orphan("config", "user.name", "AI Scientist")
+            run_orphan("remote", "add", "origin", repo_url, check=False)
+            if _has_lfs:
+                run_orphan("lfs", "install", "--local", check=False)
+                run_orphan("lfs", "track", "agent_trace/trajectory.json", check=False)
+                run_orphan("lfs", "track", "reviewer_trace/*/trace/*.jsonl", check=False)
+            # Copy only our staged files (no old workspace data).
+            for root, dirs, files in os.walk(staging):
+                for fname in files:
+                    src = os.path.join(root, fname)
+                    rel = os.path.relpath(src, staging)
+                    dst = os.path.join(orphan_dir, rel)
+                    os.makedirs(os.path.dirname(dst), exist_ok=True)
+                    shutil.copy2(src, dst)
+            run_orphan("add", "-A")
+            run_orphan("commit", "-m", f"Add agent_trace + reviewer_trace for {job_name} (clean branch)")
+            retry = run_orphan("push", "-u", "origin", branch, "--force", check=False)
+            if retry.returncode == 0:
+                print(f"  Orphan push succeeded (old workspace data replaced).")
+                return True
+            print(f"  Orphan push also failed: {retry.stderr}", file=sys.stderr)
+        finally:
+            shutil.rmtree(orphan_dir, ignore_errors=True)
+
+    print(f"  Push failed: {result.stderr}", file=sys.stderr)
+    return False
 
 
 def _find_matching_branch(
