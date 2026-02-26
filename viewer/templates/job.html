@@ -1142,10 +1142,27 @@ function renderTimeline() {
     filtered = allEvents.filter(e => activeFilters.has(e.event_type));
   }
 
-  const toRender = filtered.slice(-450);
+  // Show all events (virtualized rendering for large sets).
+  const MAX_INITIAL = 2000;
+  const toRender = filtered.length > MAX_INITIAL ? filtered.slice(-MAX_INITIAL) : filtered;
   const frag = document.createDocumentFragment();
   toRender.forEach(ev => frag.appendChild(createEventEl(ev)));
   container.appendChild(frag);
+
+  // Show "load earlier" button if events were truncated.
+  if (filtered.length > MAX_INITIAL) {
+    const btn = document.createElement('button');
+    btn.textContent = `Load ${filtered.length - MAX_INITIAL} earlier events`;
+    btn.style.cssText = 'margin:8px auto;display:block;padding:6px 16px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;font-size:12px;';
+    btn.onclick = () => {
+      btn.remove();
+      const earlier = filtered.slice(0, filtered.length - MAX_INITIAL);
+      const earlyFrag = document.createDocumentFragment();
+      earlier.forEach(ev => earlyFrag.appendChild(createEventEl(ev)));
+      container.insertBefore(earlyFrag, container.firstChild);
+    };
+    container.insertBefore(btn, container.firstChild);
+  }
 }
 
 function appendEvent(ev) {
@@ -1159,7 +1176,7 @@ function appendEvent(ev) {
   container.appendChild(createEventEl(ev));
   if (wasAtBottom) panel.scrollTop = panel.scrollHeight;
 
-  while (container.children.length > 550) {
+  while (container.children.length > 2500) {
     container.removeChild(container.firstChild);
   }
 }

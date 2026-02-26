@@ -185,7 +185,7 @@ def _categorize_tool(name: str, tool_input: dict) -> str:
     }:
         return "web"
 
-    if name in ("TodoWrite", "TaskOutput", "TaskStop"):
+    if name in ("TodoWrite", "TaskCreate", "TaskUpdate", "TaskGet", "TaskList", "TaskOutput", "TaskStop"):
         return "task_mgmt"
 
     return "other"
@@ -250,7 +250,29 @@ def _summarize_tool(name: str, tool_input: dict, event_type: str) -> str:
         return f"Subagent: {desc}"
 
     if name == "TodoWrite":
+        todos = tool_input.get("todos", [])
+        if todos and isinstance(todos, list):
+            items = []
+            for t in todos[:5]:
+                status = t.get("status", "")
+                content = t.get("content", "")[:50]
+                marker = {"completed": "x", "in_progress": "~", "pending": " "}.get(status, " ")
+                items.append(f"[{marker}] {content}")
+            summary = " | ".join(items)
+            if len(todos) > 5:
+                summary += f" (+{len(todos)-5} more)"
+            return f"TodoWrite: {summary}"
         return "TodoWrite"
+
+    if name in ("TaskCreate", "TaskUpdate"):
+        subject = tool_input.get("subject", "")
+        status = tool_input.get("status", "")
+        if subject:
+            return f"{name}: {subject[:60]}"
+        if status:
+            tid = tool_input.get("taskId", "")
+            return f"{name}: #{tid} -> {status}"
+        return name
 
     if name == "TaskOutput":
         tid = tool_input.get("task_id", "")
@@ -280,7 +302,61 @@ def _get_detail(name: str, tool_input: dict) -> Optional[str]:
 
     if name == "Task":
         prompt = tool_input.get("prompt", "")
-        return prompt[:300] if prompt else None
+        return prompt[:500] if prompt else None
+
+    if name == "TodoWrite":
+        todos = tool_input.get("todos", [])
+        if not todos:
+            return None
+        lines = []
+        for t in todos:
+            status = t.get("status", "pending")
+            content = t.get("content", "")
+            marker = {"completed": "x", "in_progress": "~", "pending": " "}.get(status, " ")
+            lines.append(f"[{marker}] {content}")
+        return "\n".join(lines)
+
+    if name in ("TaskCreate", "TaskUpdate"):
+        parts = []
+        if tool_input.get("subject"):
+            parts.append(f"Subject: {tool_input['subject']}")
+        if tool_input.get("description"):
+            parts.append(f"Description: {tool_input['description'][:200]}")
+        if tool_input.get("status"):
+            parts.append(f"Status: {tool_input['status']}")
+        return "\n".join(parts) if parts else None
+
+    if name == "Skill":
+        args = tool_input.get("args", "")
+        return args[:500] if args and len(args) > 60 else None
+
+    if name == "WebFetch":
+        parts = []
+        url = tool_input.get("url", "")
+        prompt = tool_input.get("prompt", "")
+        if url:
+            parts.append(f"URL: {url}")
+        if prompt:
+            parts.append(f"Prompt: {prompt[:300]}")
+        return "\n".join(parts) if parts else None
+
+    if name == "WebSearch":
+        query = tool_input.get("query", "")
+        return query if query and len(query) > 80 else None
+
+    if name == "Read":
+        path = tool_input.get("file_path") or tool_input.get("path") or ""
+        pages = tool_input.get("pages", "")
+        offset = tool_input.get("offset")
+        limit = tool_input.get("limit")
+        parts = [path]
+        if pages:
+            parts.append(f"pages={pages}")
+        if offset:
+            parts.append(f"offset={offset}")
+        if limit:
+            parts.append(f"limit={limit}")
+        return " ".join(parts) if len(parts) > 1 or len(path) > 60 else None
 
     return None
 
