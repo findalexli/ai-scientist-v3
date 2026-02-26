@@ -15,6 +15,8 @@ Outputs JSON to stdout:
     }
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import os
@@ -23,12 +25,13 @@ import urllib.request
 import urllib.error
 import urllib.parse
 from datetime import datetime, timezone
+from typing import Optional
 
 
 GITLAB_API = "https://gitlab.com/api/v4"
 
 
-def _api(method: str, path: str, token: str, data: dict | None = None) -> dict:
+def _api(method: str, path: str, token: str, data: Optional[dict] = None) -> dict:
     """Make a GitLab API request."""
     url = f"{GITLAB_API}{path}"
     body = json.dumps(data).encode() if data else None
