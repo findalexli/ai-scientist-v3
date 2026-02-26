@@ -134,10 +134,11 @@ except Exception as e:
         fi
 
         # CLAUDECODE="" clears the nesting guard so claude can launch from within a running session.
+        # Note: --dangerously-skip-permissions fails as root (Docker containers).
+        # Omitting it lets the agent config handle permissions.
         if ! CLAUDECODE="" claude -p \
             --agent reviewer \
             --output-format text \
-            --dangerously-skip-permissions \
             "Review the research submission. The paper is at $TEX_PATH. Inspect the full workspace: experiment_codebase/, figures/, literature/, and latex/. Follow your review procedure and produce your review." \
             > "$RAW_RESPONSE" 2>"$BASE_DIR/reviewer_subagent_stderr.log"; then
             echo "Warning: Claude reviewer subagent returned non-zero exit code." >&2
