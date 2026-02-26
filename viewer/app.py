@@ -29,6 +29,7 @@ from parse_trajectory import (
     mask_secrets,
     mask_secrets_in_text,
 )
+from gitlab_client import GitLabClient
 
 app = FastAPI(title="AI Scientist v3 — Job Viewer")
 
@@ -47,6 +48,11 @@ JOBS_LIST_CACHE: Dict[str, Any] = {
     "payload": None,
 }
 JOBS_LIST_CACHE_TTL_SEC = 3.0
+
+# GitLab client — initialized if GITLAB_KEY is set.
+GITLAB_CLIENT: Optional[GitLabClient] = None
+# Maps job_id -> (project_id, branch) for GitLab-backed jobs.
+GITLAB_JOB_MAP: Dict[str, Tuple[int, str]] = {}
 IDEA_NAME_PATTERNS = [
     re.compile(r'"Name"\s*:\s*"([^"]+)"'),
     re.compile(r'\\"Name\\"\s*:\s*\\"([^"\\]+)\\"'),
@@ -555,8 +561,25 @@ def build_submission_records(job_dir: str, job_id: str) -> List[dict]:
     return submissions
 
 
+def _is_gitlab_backed(job_id: str) -> bool:
+    """Check if a job has pre-computed data on GitLab."""
+    return GITLAB_CLIENT is not None and job_id in GITLAB_JOB_MAP
+
+
+def _gitlab_lookup(job_id: str) -> Optional[Tuple[int, str]]:
+    """Return (project_id, branch) for a GitLab-backed job, or None."""
+    if not _is_gitlab_backed(job_id):
+        return None
+    return GITLAB_JOB_MAP.get(job_id)
+
+
 def discover_jobs() -> list:
-    """Scan jobs directory and return job metadata."""
+    """Scan jobs directory and return job metadata.
+
+    If a GitLab client is configured, also includes completed jobs from GitLab.
+    GitLab jobs that also exist locally are merged (local data takes priority for
+    running jobs; GitLab data used for completed jobs to avoid re-parsing).
+    """
     jobs = []
     if not os.path.isdir(JOBS_DIR):
         return jobs
@@ -630,6 +653,20 @@ def discover_jobs() -> list:
         if model_name == "unknown" and parsed_model:
             model_name = str(parsed_model).split("/")[-1].replace("claude-", "")
 
+        # For completed jobs that are GitLab-backed, use pre-computed metrics
+        # to avoid expensive trajectory re-parsing.
+        if _is_gitlab_backed(name) and status != "running":
+            project_id, branch = GITLAB_JOB_MAP[name]
+            gl_summary = GITLAB_CLIENT.get_trajectory_summary(project_id, branch)
+            gl_meta = GITLAB_CLIENT.get_metadata(project_id, branch)
+            if gl_summary and gl_meta:
+                token_summary = gl_summary.get("cost")
+                line_count = gl_summary.get("total_lines", 0)
+                if model_name == "unknown":
+                    gl_model = gl_meta.get("model", "")
+                    if gl_model:
+                        model_name = gl_model.split("/")[-1].replace("claude-", "")
+
         jobs.append({
             "id": name,
             "dir": job_dir,
@@ -642,6 +679,20 @@ def discover_jobs() -> list:
             "tokens": token_summary,
             "task_name": mask_secrets_in_text(task_name),
         })
+
+    # Merge GitLab-only jobs (pushed to GitLab but not present locally).
+    if GITLAB_CLIENT:
+        local_ids = {j["id"] for j in jobs}
+        try:
+            gl_jobs = GITLAB_CLIENT.discover_gitlab_jobs()
+            for gj in gl_jobs:
+                if gj["id"] not in local_ids:
+                    jobs.append(gj)
+                # Always update the job map for routing.
+                if gj.get("_project_id") and gj.get("_branch"):
+                    GITLAB_JOB_MAP[gj["id"]] = (gj["_project_id"], gj["_branch"])
+        except Exception:
+            pass  # GitLab unavailable — degrade gracefully.
 
     return jobs
 
@@ -720,6 +771,25 @@ async def api_jobs():
 @app.get("/api/jobs/{job_id}/meta")
 async def api_job_meta(job_id: str):
     """Return lightweight metadata for one job."""
+    # Try GitLab first.
+    gl = _gitlab_lookup(job_id)
+    if gl:
+        project_id, branch = gl
+        gl_meta = GITLAB_CLIENT.get_metadata(project_id, branch)
+        if gl_meta:
+            model = gl_meta.get("model", "unknown")
+            if "/" in model:
+                model = model.split("/")[-1]
+            model = model.replace("claude-", "")
+            return JSONResponse({
+                "id": job_id,
+                "status": gl_meta.get("status", "completed"),
+                "duration_seconds": gl_meta.get("duration_seconds"),
+                "model": model,
+                "submissions": gl_meta.get("submission_count", 0),
+            })
+
+    # Fallback to local disk.
     meta = discover_job_meta(job_id)
     if not meta:
         return JSONResponse({"error": "Job not found"}, status_code=404)
@@ -799,6 +869,20 @@ async def stream_events(job_id: str, after: int = 0):
 @app.get("/api/jobs/{job_id}/tokens")
 async def api_tokens(job_id: str):
     """Token usage summary and per-step breakdown."""
+    # Try GitLab first for completed jobs (pre-computed, instant).
+    gl = _gitlab_lookup(job_id)
+    if gl:
+        project_id, branch = gl
+        summary = GITLAB_CLIENT.get_trajectory_summary(project_id, branch)
+        if summary:
+            return JSONResponse({
+                "cost": summary.get("cost"),
+                "cumulative_tokens": summary.get("cumulative_tokens") or [],
+                "tool_breakdown": summary.get("tool_breakdown") or [],
+                "event_type_breakdown": summary.get("event_type_breakdown") or [],
+            })
+
+    # Fallback to local disk.
     job_dir = os.path.join(JOBS_DIR, job_id)
     if not os.path.isdir(job_dir):
         return JSONResponse({"error": "Job not found"}, status_code=404)
@@ -828,6 +912,36 @@ async def api_job_idea(job_id: str):
 @app.get("/api/jobs/{job_id}/submissions")
 async def api_submissions(job_id: str):
     """Read submission versions with markdown review/rebuttal and paper links."""
+    # Try GitLab for completed jobs (version_log + response.md per version).
+    gl = _gitlab_lookup(job_id)
+    if gl:
+        project_id, branch = gl
+        vlog = GITLAB_CLIENT.get_file_json(project_id, branch, "reviewer_trace/version_log.json")
+        if vlog and vlog.get("versions"):
+            submissions = []
+            for v in vlog["versions"]:
+                vdir = v.get("directory", "")
+                resp_path = f"reviewer_trace/{vdir}/response.md" if vdir else None
+                review_md = ""
+                rebuttal_md = None
+                if resp_path:
+                    resp_data = GITLAB_CLIENT.get_file_raw(project_id, branch, resp_path)
+                    if resp_data:
+                        resp_text = resp_data.decode("utf-8", errors="replace")
+                        review_md, rebuttal_md = _split_review_rebuttal(resp_text)
+                submissions.append({
+                    "version": v.get("version"),
+                    "timestamp": v.get("timestamp"),
+                    "directory": vdir,
+                    "reviewer_mode": v.get("reviewer_mode"),
+                    "review_markdown": review_md,
+                    "rebuttal_markdown": rebuttal_md,
+                    "paper_url": f"/api/jobs/{job_id}/submissions/{vdir}/paper" if vdir else None,
+                })
+            submissions.sort(key=lambda r: (r.get("version") or -1, r.get("timestamp") or ""), reverse=True)
+            return JSONResponse({"submissions": submissions, "total": len(submissions)})
+
+    # Fallback to local disk.
     job_dir = os.path.join(JOBS_DIR, job_id)
     if not os.path.isdir(job_dir):
         return JSONResponse({"error": "Job not found"}, status_code=404)
@@ -839,11 +953,30 @@ async def api_submissions(job_id: str):
 @app.get("/api/jobs/{job_id}/submissions/{submission_dir}/paper")
 async def api_submission_pdf(job_id: str, submission_dir: str):
     """Serve paper.pdf for a specific submission version directory."""
+    if not _safe_submission_dir_name(submission_dir):
+        return JSONResponse({"error": "Invalid submission directory"}, status_code=400)
+
+    # Try GitLab for the main paper.pdf (pushed as paper.pdf at repo root).
+    gl = _gitlab_lookup(job_id)
+    if gl:
+        project_id, branch = gl
+        pdf_bytes = GITLAB_CLIENT.get_file_raw(project_id, branch, "paper.pdf")
+        if pdf_bytes:
+            from starlette.responses import Response
+            return Response(
+                content=pdf_bytes,
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": "inline; filename=paper.pdf",
+                    "Cache-Control": "no-store",
+                    "X-Content-Type-Options": "nosniff",
+                },
+            )
+
+    # Fallback to local disk.
     job_dir = os.path.join(JOBS_DIR, job_id)
     if not os.path.isdir(job_dir):
         return JSONResponse({"error": "Job not found"}, status_code=404)
-    if not _safe_submission_dir_name(submission_dir):
-        return JSONResponse({"error": "Invalid submission directory"}, status_code=400)
 
     for root in iter_submission_roots(job_dir):
         pdf_path = os.path.join(root, submission_dir, "paper.pdf")
@@ -864,6 +997,17 @@ async def api_submission_pdf(job_id: str, submission_dir: str):
 @app.get("/api/jobs/{job_id}/artifacts")
 async def api_artifacts(job_id: str):
     """List figures, papers, and other artifacts."""
+    # Try GitLab for completed jobs.
+    gl = _gitlab_lookup(job_id)
+    if gl:
+        project_id, branch = gl
+        gl_meta = GITLAB_CLIENT.get_metadata(project_id, branch)
+        if gl_meta:
+            figures = gl_meta.get("figures", [])
+            papers = ["paper.pdf"] if gl_meta.get("has_paper_pdf") else []
+            return JSONResponse({"figures": figures, "papers": papers})
+
+    # Fallback to local disk.
     job_dir = os.path.join(JOBS_DIR, job_id)
     if not os.path.isdir(job_dir):
         return JSONResponse({"error": "Job not found"}, status_code=404)
@@ -888,6 +1032,15 @@ async def api_artifacts(job_id: str):
 @app.get("/api/jobs/{job_id}/trajectory")
 async def api_trajectory(job_id: str, regenerate: bool = False):
     """Return ATIF trajectory JSON, generating it if needed."""
+    # Try GitLab for completed jobs (sanitized trajectory in agent_trace/).
+    gl = _gitlab_lookup(job_id)
+    if gl and not regenerate:
+        project_id, branch = gl
+        traj = GITLAB_CLIENT.get_file_json(project_id, branch, "agent_trace/trajectory.json")
+        if traj:
+            return JSONResponse(traj)
+
+    # Fallback to local disk.
     job_dir = os.path.join(JOBS_DIR, job_id)
     if not os.path.isdir(job_dir):
         return JSONResponse({"error": "Job not found"}, status_code=404)
@@ -929,6 +1082,30 @@ async def api_trajectory(job_id: str, regenerate: bool = False):
 # Main
 # ---------------------------------------------------------------------------
 
+def _init_gitlab_client():
+    """Initialize GitLab client if GITLAB_KEY is set."""
+    global GITLAB_CLIENT
+    token = os.environ.get("GITLAB_KEY", "")
+    if not token:
+        return
+    try:
+        client = GitLabClient(token)
+        if client.username:
+            GITLAB_CLIENT = client
+            print(f"  GitLab: connected as {client.username}")
+            # Pre-populate job map from GitLab repos.
+            try:
+                gl_jobs = client.discover_gitlab_jobs()
+                for gj in gl_jobs:
+                    if gj.get("_project_id") and gj.get("_branch"):
+                        GITLAB_JOB_MAP[gj["id"]] = (gj["_project_id"], gj["_branch"])
+                print(f"  GitLab: {len(GITLAB_JOB_MAP)} jobs indexed")
+            except Exception as e:
+                print(f"  GitLab: job discovery failed: {e}")
+    except Exception as e:
+        print(f"  GitLab: init failed: {e}")
+
+
 def main():
     global JOBS_DIR
     parser = argparse.ArgumentParser(description="AI Scientist v3 — Job Viewer")
@@ -940,8 +1117,10 @@ def main():
     JOBS_DIR = os.path.abspath(args.jobs_dir)
     print(f"AI Scientist v3 — Job Viewer")
     print(f"  Jobs dir: {JOBS_DIR}")
-    print(f"  Serving on http://{args.host}:{args.port}")
 
+    _init_gitlab_client()
+
+    print(f"  Serving on http://{args.host}:{args.port}")
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
 
 
