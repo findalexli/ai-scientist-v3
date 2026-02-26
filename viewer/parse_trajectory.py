@@ -78,6 +78,41 @@ def _mask_events(events: List[Event]) -> None:
             ev.detail = mask_secrets_in_text(ev.detail)
 
 
+def _estimate_tokens_from_chars(char_count: int) -> int:
+    """Estimate token count from character count.
+
+    Approximation: ~3.5 chars per token for code-heavy content (Claude tokenizer).
+    English prose averages ~4 chars/token, but code, JSON, and tool args are denser.
+    """
+    if char_count <= 0:
+        return 0
+    return max(1, int(char_count / 3.5))
+
+
+def _estimate_output_tokens_from_content(content_blocks: list) -> int:
+    """Estimate output tokens from actual content blocks in Claude Code JSONL.
+
+    The usage.output_tokens field is unreliable (per-block streaming deltas).
+    This estimates from the real text content the model produced.
+    """
+    total_chars = 0
+    for block in content_blocks:
+        block_type = block.get("type", "")
+        if block_type == "thinking":
+            total_chars += len(block.get("thinking", ""))
+        elif block_type == "text":
+            total_chars += len(block.get("text", ""))
+        elif block_type == "tool_use":
+            # Tool name + serialized input arguments.
+            total_chars += len(block.get("name", ""))
+            inp = block.get("input", {})
+            if isinstance(inp, dict):
+                total_chars += len(json.dumps(inp, ensure_ascii=False))
+            elif isinstance(inp, str):
+                total_chars += len(inp)
+    return _estimate_tokens_from_chars(total_chars)
+
+
 def _extract_tokens(usage: dict) -> TokenInfo:
     if not usage:
         return TokenInfo()
@@ -342,6 +377,27 @@ def parse_atif_trajectory(path: str, after_line: int = 0) -> ParseResult:
         source = step.get("source", "agent")
         ts = step.get("timestamp")
         token_info = _extract_tokens_from_metrics(step.get("metrics", {}))
+
+        # Override output_tokens with content-based estimate when the reported
+        # value is suspiciously low.  ATIF drops thinking content
+        # (reasoning_content is empty), so completion_tokens under-counts.
+        if source == "agent":
+            content_chars = 0
+            msg_text = step.get("message", "")
+            if isinstance(msg_text, str):
+                content_chars += len(msg_text)
+            reasoning = step.get("reasoning_content", "")
+            if isinstance(reasoning, str):
+                content_chars += len(reasoning)
+            for tc in (step.get("tool_calls") or []):
+                if isinstance(tc, dict):
+                    args = tc.get("arguments", {})
+                    content_chars += len(json.dumps(args, ensure_ascii=False) if isinstance(args, dict) else str(args))
+                    content_chars += len(tc.get("function_name", ""))
+            estimated = _estimate_tokens_from_chars(content_chars)
+            if estimated > token_info.output_tokens:
+                token_info.output_tokens = estimated
+
         token_dict = asdict(token_info) if any([
             token_info.input_tokens,
             token_info.output_tokens,
@@ -481,6 +537,9 @@ def parse_claude_code_jsonl(path: str, after_line: int = 0) -> ParseResult:
     model = None
     step = after_line  # step counter continues from where we left off
     seen_msg_ids = set()  # Track message IDs to avoid double-counting tokens
+    # Accumulate all content blocks per message ID so we can estimate output
+    # tokens from actual content rather than the unreliable usage.output_tokens.
+    msg_content_blocks: Dict[str, list] = {}
 
     if not os.path.exists(path):
         return ParseResult(events=[], total_lines=0)
@@ -526,14 +585,28 @@ def parse_claude_code_jsonl(path: str, after_line: int = 0) -> ParseResult:
                 usage = message.get("usage", {})
                 content_blocks = message.get("content", [])
 
+                # Accumulate content blocks for output token estimation.
+                msg_id = message.get("id", "")
+                if msg_id:
+                    if msg_id not in msg_content_blocks:
+                        msg_content_blocks[msg_id] = []
+                    msg_content_blocks[msg_id].extend(content_blocks)
+
                 # Only count tokens once per unique API call (message ID).
                 # Claude Code splits multi-block responses into separate JSONL
                 # lines, each carrying the full usage for that API call.
-                msg_id = message.get("id", "")
                 if msg_id and msg_id in seen_msg_ids:
                     token_info = None  # Already counted for this API call
                 else:
                     token_info = _extract_tokens(usage)
+                    # Override output_tokens with content-based estimate.
+                    # The usage.output_tokens is unreliable (per-block streaming
+                    # deltas of 1-19 tokens, not the real total).
+                    if token_info and msg_id:
+                        all_blocks = msg_content_blocks.get(msg_id, content_blocks)
+                        estimated = _estimate_output_tokens_from_content(all_blocks)
+                        if estimated > token_info.output_tokens:
+                            token_info.output_tokens = estimated
                     if msg_id:
                         seen_msg_ids.add(msg_id)
 
@@ -745,14 +818,12 @@ def compute_event_type_breakdown(events: list) -> list:
 def estimate_cost(events: list, model: str = "claude-opus-4-6") -> dict:
     """Estimate cost based on token usage and model pricing.
 
-    NOTE on output_tokens accuracy:
-    - Claude Code JSONL: output_tokens comes from per-block streaming deltas in
-      message_start events (1-19 tokens each), NOT the final cumulative total.
-      This significantly under-counts real output.
-    - ATIF trajectory: reasoning_content is empty (thinking content is dropped),
-      so output tokens from thinking are not captured.
-    - For accurate output token counts, the real content in the JSONL must be
-      used to estimate tokens. The values here are lower bounds.
+    NOTE on output_tokens:
+    - The raw usage.output_tokens from Claude Code JSONL and ATIF completion_tokens
+      are unreliable (per-block streaming deltas / dropped thinking content).
+    - The parsers now override output_tokens with content-based estimates
+      (~3.5 chars/token) when the reported value is suspiciously low.
+    - This is an approximation; actual token counts depend on the model's tokenizer.
     """
     # Pricing per million tokens (USD) — updated Feb 2026
     # Cache read = 0.1x input, cache write (5min) = 1.25x input
