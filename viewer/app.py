@@ -712,19 +712,9 @@ def discover_jobs() -> list:
             "task_name": mask_secrets_in_text(task_name),
         })
 
-    # Merge GitLab-only jobs (pushed to GitLab but not present locally).
-    if GITLAB_CLIENT:
-        local_ids = {j["id"] for j in jobs}
-        try:
-            gl_jobs = GITLAB_CLIENT.discover_gitlab_jobs()
-            for gj in gl_jobs:
-                if gj["id"] not in local_ids:
-                    jobs.append(gj)
-                # Always update the job map for routing.
-                if gj.get("_project_id") and gj.get("_branch"):
-                    GITLAB_JOB_MAP[gj["id"]] = (gj["_project_id"], gj["_branch"])
-        except Exception:
-            pass  # GitLab unavailable — degrade gracefully.
+    # Note: GitLab-only jobs (no local dir) are rare in practice.  The job map
+    # is populated at startup by _init_gitlab_client; we don't re-discover here
+    # to avoid a 3-4s API round-trip on every dashboard refresh.
 
     return jobs
 
@@ -1124,7 +1114,10 @@ async def api_trajectory(job_id: str, regenerate: bool = False):
 # ---------------------------------------------------------------------------
 
 def _init_gitlab_client():
-    """Initialize GitLab client if GITLAB_KEY is set."""
+    """Initialize GitLab client if GITLAB_KEY is set.
+
+    Pre-warms all caches so the first page load is fast.
+    """
     global GITLAB_CLIENT
     token = os.environ.get("GITLAB_KEY", "")
     if not token:
@@ -1143,6 +1136,17 @@ def _init_gitlab_client():
                 print(f"  GitLab: {len(GITLAB_JOB_MAP)} jobs indexed")
             except Exception as e:
                 print(f"  GitLab: job discovery failed: {e}")
+
+            # Pre-warm trajectory summary cache in parallel so first page
+            # load doesn't block on N sequential GitLab API calls.
+            if GITLAB_JOB_MAP:
+                from concurrent.futures import ThreadPoolExecutor
+                def _warm(item):
+                    pid, branch = item
+                    client.get_trajectory_summary(pid, branch)
+                with ThreadPoolExecutor(max_workers=10) as pool:
+                    pool.map(_warm, GITLAB_JOB_MAP.values())
+                print(f"  GitLab: caches pre-warmed")
     except Exception as e:
         print(f"  GitLab: init failed: {e}")
 
