@@ -1537,7 +1537,10 @@ function startSSE() {
   });
 
   evtSource.onerror = () => {
-    setTimeout(() => { if (isLive) startSSE(); }, 5000);
+    evtSource.close();
+    // Only retry if the job is still running. In gitlab mode, SSE returns 404
+    // for all jobs (they're completed), so don't retry endlessly.
+    if (isLive) setTimeout(() => startSSE(), 5000);
   };
 
   if (tokenRefreshTimer) clearInterval(tokenRefreshTimer);
