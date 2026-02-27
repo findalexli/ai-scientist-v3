@@ -198,6 +198,24 @@ def generate_trajectory_summary(
     }
 
 
+def _trim_trajectory(data: dict) -> None:
+    """Trim duplicate/debug fields in ATIF trajectory to keep file size manageable.
+
+    Harbor ATIF stores tool results in both `observation` (what the model saw)
+    and `extra` (debug metadata including tool_result_metadata and metadata
+    which are near-identical copies). We keep observation + message intact
+    (faithful to the spec) but strip the duplicated extra fields.
+    """
+    for step in data.get("steps", []):
+        extra = step.get("extra")
+        if not isinstance(extra, dict):
+            continue
+        # These fields duplicate the observation content, often 2x the data.
+        for dup_key in ("tool_result_metadata", "metadata"):
+            if dup_key in extra and len(json.dumps(extra[dup_key])) > 5000:
+                extra[dup_key] = {"_trimmed": True, "_note": "Duplicate of observation; removed to reduce file size"}
+
+
 # ---------------------------------------------------------------------------
 # File staging
 # ---------------------------------------------------------------------------
@@ -246,10 +264,22 @@ def stage_artifacts(
     trace_dir = os.path.join(staging, "agent_trace")
     os.makedirs(trace_dir, exist_ok=True)
 
-    # Sanitized trajectory.
+    # Sanitized + trimmed trajectory.
+    # Harbor ATIF embeds full subagent transcripts (8MB+) in observation, extra,
+    # and metadata fields — often 3x duplicated. Truncate large values since
+    # the viewer only needs summaries. This keeps trajectories under 100MB.
     traj_path = find_trajectory_path(job_dir)
     if traj_path and os.path.isfile(traj_path):
-        sanitizer.sanitize_file(traj_path, os.path.join(trace_dir, "trajectory.json"))
+        try:
+            with open(traj_path, "r", errors="replace") as f:
+                traj_data = json.load(f)
+            _trim_trajectory(traj_data)
+            traj_data = sanitizer.sanitize_json(traj_data)
+            with open(os.path.join(trace_dir, "trajectory.json"), "w") as f:
+                json.dump(traj_data, f, ensure_ascii=False)
+        except (json.JSONDecodeError, OSError):
+            # Fallback: sanitize as plain text.
+            sanitizer.sanitize_file(traj_path, os.path.join(trace_dir, "trajectory.json"))
 
     # Paper PDF (top-level).
     has_paper = False
@@ -379,13 +409,9 @@ def _git_push_inner(
     run_git("config", "user.email", "ai-scientist@noreply.local")
     run_git("config", "user.name", "AI Scientist")
 
-    # Enable LFS for large files (trajectory.json can be 10-50MB+).
-    _has_lfs = shutil.which("git-lfs") is not None
-    if _has_lfs:
-        run_git("lfs", "install", "--local", check=False)
-        # Track large JSON and JSONL files via LFS.
-        run_git("lfs", "track", "agent_trace/trajectory.json", check=False)
-        run_git("lfs", "track", "reviewer_trace/*/trace/*.jsonl", check=False)
+    # Note: we do NOT use LFS for our pushed files. The viewer reads them
+    # via GitLab raw file API which returns LFS pointers instead of content.
+    # Sanitized trajectories are typically <50MB, well within GitLab's 100MB limit.
 
     # Copy staged artifacts into the working directory.
     for root, dirs, files in os.walk(staging):
@@ -428,10 +454,6 @@ def _git_push_inner(
             run_orphan("config", "user.email", "ai-scientist@noreply.local")
             run_orphan("config", "user.name", "AI Scientist")
             run_orphan("remote", "add", "origin", repo_url, check=False)
-            if _has_lfs:
-                run_orphan("lfs", "install", "--local", check=False)
-                run_orphan("lfs", "track", "agent_trace/trajectory.json", check=False)
-                run_orphan("lfs", "track", "reviewer_trace/*/trace/*.jsonl", check=False)
             # Copy only our staged files (no old workspace data).
             for root, dirs, files in os.walk(staging):
                 for fname in files:
