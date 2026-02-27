@@ -140,7 +140,7 @@ def generate_metadata(
     # Determine status.
     status = "completed"
     if not finished_at:
-        status = "running"
+        status = "timeout"
     trials = result.get("stats", {})
     if isinstance(trials, dict) and trials.get("n_errors", 0) > 0:
         status = "error"
@@ -702,9 +702,15 @@ def backfill(jobs_dir: str, dry_run: bool = False) -> List[dict]:
             print(f"Skipping {entry}: no idea stem")
             continue
 
-        # Check if job has finished (result.json with finished_at).
+        # Check if job has finished or timed out (CancelledError).
+        # Jobs with finished_at are cleanly completed. Jobs without it but
+        # with exception_info (e.g. CancelledError) are timed out — still push.
         result_data = read_json(os.path.join(job_dir, "result.json"))
-        if not result_data.get("finished_at"):
+        task_dir_check = find_harbor_task_dir(job_dir)
+        task_result = read_json(os.path.join(task_dir_check, "result.json")) if task_dir_check else {}
+        has_finished = bool(result_data.get("finished_at"))
+        has_exception = bool(task_result.get("exception_info"))
+        if not has_finished and not has_exception:
             print(f"Skipping {entry}: not finished")
             continue
 
