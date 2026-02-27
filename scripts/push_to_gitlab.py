@@ -260,6 +260,20 @@ def stage_artifacts(
     if os.path.isfile(exc_path):
         sanitizer.sanitize_file(exc_path, os.path.join(staging, "exception.txt"))
 
+    # idea.json — original idea input for viewer display.
+    idea_stem, _ = parse_job_id(job_dir)
+    if idea_stem:
+        for idea_candidate in [
+            os.path.join(str(REPO_ROOT), f"idea_{idea_stem}.json"),
+            os.path.join(str(REPO_ROOT), "ideas", f"idea_{idea_stem}.json"),
+        ]:
+            if os.path.isfile(idea_candidate):
+                data = read_json(idea_candidate)
+                sanitized = sanitizer.sanitize_json(data)
+                with open(os.path.join(staging, "idea.json"), "w") as f:
+                    json.dump(sanitized, f, indent=2)
+                break
+
     # --- agent_trace/ ---
     trace_dir = os.path.join(staging, "agent_trace")
     os.makedirs(trace_dir, exist_ok=True)

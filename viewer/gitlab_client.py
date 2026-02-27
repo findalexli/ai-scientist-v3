@@ -114,17 +114,107 @@ class GitLabClient:
     # File access
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _parse_lfs_pointer(data: bytes) -> Optional[dict]:
+        """Parse a Git LFS pointer file. Returns {oid, size} or None."""
+        try:
+            text = data.decode("utf-8", errors="replace")
+        except Exception:
+            return None
+        if not text.startswith("version https://git-lfs.github.com/"):
+            return None
+        info: Dict[str, str] = {}
+        for line in text.strip().splitlines():
+            if " " in line:
+                key, val = line.split(" ", 1)
+                info[key] = val
+        oid = info.get("oid", "")
+        if oid.startswith("sha256:"):
+            oid = oid[7:]
+        size_str = info.get("size", "0")
+        if oid:
+            return {"oid": oid, "size": int(size_str)}
+        return None
+
+    def _get_project_http_url(self, project_id: int) -> Optional[str]:
+        """Get the HTTP clone URL for a project (cached)."""
+        cache_key = f"http_url:{project_id}"
+        entry = self._cache.get(cache_key)
+        if entry and entry.is_valid():
+            return entry.data
+        proj = self._api(f"/projects/{project_id}")
+        if not proj:
+            return None
+        url = proj.get("http_url_to_repo")
+        if url:
+            self._cache[cache_key] = CacheEntry(url, self.METADATA_TTL)
+        return url
+
+    def _fetch_lfs_blob(self, project_id: int, oid: str, size: int) -> Optional[bytes]:
+        """Download an LFS blob via the Git LFS batch API."""
+        import base64
+        http_url = self._get_project_http_url(project_id)
+        if not http_url:
+            return None
+        lfs_url = f"{http_url}/info/lfs/objects/batch"
+        payload = json.dumps({
+            "operation": "download",
+            "objects": [{"oid": oid, "size": size}],
+        }).encode()
+        auth = base64.b64encode(f"oauth2:{self.token}".encode()).decode()
+        headers = {
+            "Content-Type": "application/vnd.git-lfs+json",
+            "Accept": "application/vnd.git-lfs+json",
+            "Authorization": f"Basic {auth}",
+        }
+        req = urllib.request.Request(lfs_url, data=payload, headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                batch = json.loads(resp.read().decode())
+        except (urllib.error.HTTPError, urllib.error.URLError, OSError):
+            return None
+
+        objects = batch.get("objects", [])
+        if not objects:
+            return None
+        actions = objects[0].get("actions", {})
+        download = actions.get("download", {})
+        href = download.get("href")
+        if not href:
+            return None
+
+        # Download the actual blob.
+        dl_headers = download.get("header", {})
+        dl_req = urllib.request.Request(href, headers=dl_headers)
+        try:
+            with urllib.request.urlopen(dl_req, timeout=120) as resp:
+                return resp.read()
+        except (urllib.error.HTTPError, urllib.error.URLError, OSError):
+            return None
+
+    def _fetch_file_raw(self, project_id: int, branch: str, path: str) -> Optional[bytes]:
+        """Fetch raw file content, resolving LFS pointers transparently."""
+        encoded_path = urllib.parse.quote(path, safe="")
+        data = self._api(
+            f"/projects/{project_id}/repository/files/{encoded_path}/raw?ref={branch}",
+            raw=True,
+        )
+        if data is None:
+            return None
+        # Check if this is an LFS pointer and resolve it.
+        lfs = self._parse_lfs_pointer(data)
+        if lfs:
+            resolved = self._fetch_lfs_blob(project_id, lfs["oid"], lfs["size"])
+            return resolved if resolved else None
+        return data
+
     def get_file_json(self, project_id: int, branch: str, path: str, ttl: Optional[float] = None) -> Optional[dict]:
-        """Fetch and parse a JSON file from a branch."""
+        """Fetch and parse a JSON file from a branch (resolves LFS pointers)."""
         cache_key = f"file:{project_id}:{branch}:{path}"
         effective_ttl = ttl if ttl is not None else self.FILE_TTL
 
         def fetch():
-            encoded_path = urllib.parse.quote(path, safe="")
-            data = self._api(
-                f"/projects/{project_id}/repository/files/{encoded_path}/raw?ref={branch}",
-                raw=True,
-            )
+            data = self._fetch_file_raw(project_id, branch, path)
             if data is None:
                 return None
             try:
@@ -135,15 +225,11 @@ class GitLabClient:
         return self._cached(cache_key, effective_ttl, fetch)
 
     def get_file_raw(self, project_id: int, branch: str, path: str) -> Optional[bytes]:
-        """Fetch raw file bytes (for PDFs, images)."""
+        """Fetch raw file bytes, resolving LFS pointers transparently."""
         cache_key = f"raw:{project_id}:{branch}:{path}"
 
         def fetch():
-            encoded_path = urllib.parse.quote(path, safe="")
-            return self._api(
-                f"/projects/{project_id}/repository/files/{encoded_path}/raw?ref={branch}",
-                raw=True,
-            )
+            return self._fetch_file_raw(project_id, branch, path)
 
         return self._cached(cache_key, self.FILE_TTL, fetch)
 

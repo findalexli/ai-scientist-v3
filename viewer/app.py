@@ -960,6 +960,24 @@ async def api_tokens(job_id: str):
 @app.get("/api/jobs/{job_id}/idea")
 async def api_job_idea(job_id: str):
     """Return original idea JSON matched by job stem."""
+    # Try GitLab first: idea.json is pushed alongside other artifacts.
+    gl = _gitlab_lookup(job_id)
+    if gl:
+        project_id, branch = gl
+        idea_data = GITLAB_CLIENT.get_file_json(project_id, branch, "idea.json")
+        if idea_data:
+            stem = _extract_idea_stem(job_id)
+            text = json.dumps(idea_data, indent=2)
+            return JSONResponse({
+                "found": True,
+                "stem": stem,
+                "source": "gitlab",
+                "content": mask_secrets_in_text(text),
+                "format": "json",
+            })
+        # No idea.json on GitLab — return not-found.
+        return JSONResponse({"found": False, "stem": _extract_idea_stem(job_id), "source": None, "content": None, "format": None})
+
     if SOURCE_MODE == "gitlab":
         return JSONResponse({"found": False, "stem": None, "source": None, "content": None, "format": None})
     job_dir = os.path.join(JOBS_DIR, job_id)

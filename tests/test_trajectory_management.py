@@ -166,6 +166,56 @@ class TestViewerGenerateTrajectory(unittest.TestCase):
         self.assertEqual(result, traj_path)
 
 
+class TestTokenAccountingRegression(unittest.TestCase):
+    """Regression tests for token accounting in viewer parsing."""
+
+    def test_atif_metrics_do_not_double_count_cache_read(self):
+        from parse_trajectory import _extract_tokens_from_metrics
+
+        metrics = {
+            "prompt_tokens": 14692,  # includes cache read in Harbor ATIF
+            "completion_tokens": 2,
+            "extra": {
+                "cache_read_input_tokens": 14691,
+                "cache_creation_input_tokens": 175,
+            },
+        }
+        token_info = _extract_tokens_from_metrics(metrics)
+        # Uncached input should be prompt - cache_read (1), not prompt itself.
+        self.assertEqual(token_info.input_tokens, 1)
+        self.assertEqual(token_info.output_tokens, 2)
+        self.assertEqual(token_info.cache_read, 14691)
+        self.assertEqual(token_info.cache_creation, 175)
+
+    def test_claude_jsonl_counts_tokens_once_per_message(self):
+        from parse_trajectory import parse_claude_code_jsonl
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_path = Path(tmpdir) / "claude-code.txt"
+            payload = {
+                "type": "assistant",
+                "message": {
+                    "id": "msg_abc",
+                    "usage": {"input_tokens": 10, "output_tokens": 4},
+                    "content": [
+                        {"type": "text", "text": "hello"},
+                        {"type": "tool_use", "name": "Bash", "input": {"command": "echo hi"}, "id": "tool_1"},
+                    ],
+                },
+            }
+            log_path.write_text(json.dumps(payload) + "\n")
+
+            result = parse_claude_code_jsonl(str(log_path))
+            token_events = [e for e in result.events if e.tokens]
+            self.assertEqual(len(token_events), 1)
+            self.assertEqual(token_events[0].tokens.get("input_tokens"), 10)
+            # output_tokens is overridden by content-based estimation when
+            # the estimate exceeds the raw usage value (which is unreliable
+            # per-block streaming deltas). The estimate from "hello" text +
+            # tool_use JSON is higher than the raw value of 4.
+            self.assertGreaterEqual(token_events[0].tokens.get("output_tokens"), 4)
+
+
 class TestTrajectoryEndpoint(unittest.TestCase):
     """Test the /api/jobs/{job_id}/trajectory FastAPI endpoint."""
 

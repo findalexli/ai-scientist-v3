@@ -6,153 +6,219 @@
 <title>Job Detail — AI Scientist v3</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.1.7/dist/purify.min.js"></script>
 <style>
 :root {
-  --bg0: #070b0f;
-  --bg1: #0d1420;
-  --bg2: #101c2b;
-  --surface: #121b2a;
-  --surface2: #1a2638;
-  --surface3: #22344a;
-  --border: #2f4761;
-  --text: #edf4ff;
-  --text-dim: #9eb3cb;
-  --accent: #35c2ff;
-  --accent-2: #4ce0b3;
-  --warm: #ffbf69;
-  --danger: #ff7e7e;
+  --bg0: #060a10;
+  --bg1: #0c1219;
+  --bg2: #0f1a28;
+  --surface: #111c2b;
+  --surface2: #182838;
+  --surface3: #1f3248;
+  --border: #1c2e44;
+  --border-hover: #2c4a6a;
+  --text: #e2ecf6;
+  --text-dim: #6e88a6;
+  --text-muted: #3e5670;
+  --accent: #5cb8ff;
+  --accent-glow: rgba(92,184,255,0.15);
+  --accent-2: #3dd9a4;
+  --accent2-glow: rgba(61,217,164,0.12);
+  --warm: #ffaa44;
+  --danger: #ff6670;
+  --purple: #a07cff;
+  --pink: #ff6a96;
 }
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
+
 body {
-  font-family: 'Manrope', sans-serif;
+  font-family: 'Outfit', sans-serif;
   color: var(--text);
-  background:
-    radial-gradient(1200px 500px at 0% -10%, rgba(53,194,255,0.2), transparent 60%),
-    radial-gradient(900px 480px at 100% 0%, rgba(76,224,179,0.14), transparent 60%),
-    linear-gradient(180deg, var(--bg1), var(--bg0));
+  background: var(--bg0);
   min-height: 100vh;
   line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Layered background */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 1400px 600px at 10% -8%, rgba(92,184,255,0.10), transparent 65%),
+    radial-gradient(ellipse 1000px 500px at 90% -5%, rgba(61,217,164,0.07), transparent 60%),
+    radial-gradient(ellipse 600px 400px at 50% 100%, rgba(160,124,255,0.05), transparent 60%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Noise grain overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  opacity: 0.028;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+  background-size: 256px 256px;
+  pointer-events: none;
+  z-index: 9998;
 }
 
 .page {
-  max-width: 1520px;
+  position: relative;
+  z-index: 1;
+  max-width: 1560px;
   margin: 0 auto;
-  padding: 18px 18px 36px;
+  padding: 20px 24px 40px;
 }
 
+/* ─── Header ─── */
 .header {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 14px 18px;
+  gap: 14px;
+  padding: 16px 20px;
   border: 1px solid var(--border);
   border-radius: 14px;
-  background: linear-gradient(180deg, rgba(18,27,42,0.95), rgba(18,27,42,0.76));
-  backdrop-filter: blur(6px);
-  box-shadow: 0 14px 40px rgba(0,0,0,0.35);
+  background: linear-gradient(180deg, rgba(17,28,43,0.92), rgba(12,18,25,0.82));
+  backdrop-filter: blur(12px);
+  box-shadow:
+    0 1px 0 0 rgba(255,255,255,0.03) inset,
+    0 16px 48px rgba(0,0,0,0.4);
 }
+
 .header a {
   color: var(--accent);
   text-decoration: none;
   font-weight: 600;
+  font-size: 13px;
+  transition: opacity 0.15s ease;
 }
+
+.header a:hover { opacity: 0.8; }
+
 .header h1 {
-  font-size: 18px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 400px;
 }
+
 .header-stats {
   margin-left: auto;
   display: flex;
-  gap: 20px;
+  gap: 24px;
   align-items: center;
 }
+
 .stat {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   text-transform: uppercase;
-  font-size: 10px;
+  font-size: 9px;
+  font-weight: 600;
   letter-spacing: 0.1em;
-  color: var(--text-dim);
+  color: var(--text-muted);
 }
+
 .stat .val {
   font-family: 'JetBrains Mono', monospace;
   font-size: 18px;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
   color: var(--text);
+  line-height: 1.1;
 }
+
 .stat .val.cost { color: var(--warm); }
 
 .status-badge, .model-badge {
-  border-radius: 999px;
+  border-radius: 6px;
   padding: 4px 10px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
-.status-badge.running { color: #66f0a2; background: rgba(76,224,179,0.18); }
-.status-badge.completed { color: #bcd0e5; background: rgba(158,179,203,0.18); }
-.status-badge.idle { color: var(--warm); background: rgba(255,191,105,0.18); }
-.status-badge.unknown { color: #c6d2df; background: rgba(158,179,203,0.1); }
-.model-badge { background: rgba(53,194,255,0.16); color: var(--accent); }
 
+.status-badge.running { color: #66f0a2; background: rgba(76,224,179,0.15); }
+.status-badge.completed { color: #8aa6c2; background: rgba(138,166,194,0.12); }
+.status-badge.idle { color: var(--warm); background: rgba(255,170,68,0.12); }
+.status-badge.unknown { color: var(--text-dim); background: rgba(110,136,166,0.1); }
+.model-badge { background: var(--accent-glow); color: var(--accent); }
+
+/* ─── Tabs ─── */
 .tab-switcher {
-  margin-top: 12px;
+  margin-top: 14px;
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
-.help-strip {
-  margin-top: 10px;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  color: var(--text-dim);
-  font-size: 12px;
-  background: rgba(26,38,56,0.5);
-}
+
 .tab-btn {
   border: 1px solid var(--border);
-  background: rgba(30,48,70,0.54);
+  background: rgba(24,40,56,0.5);
   color: var(--text-dim);
+  font-family: 'Outfit', sans-serif;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  border-radius: 999px;
-  padding: 7px 12px;
+  border-radius: 8px;
+  padding: 8px 14px;
   cursor: pointer;
+  transition: all 0.15s ease;
 }
+
+.tab-btn:hover {
+  border-color: var(--border-hover);
+  color: var(--text);
+}
+
 .tab-btn.active {
-  background: rgba(53,194,255,0.24);
-  color: #fff;
-  border-color: var(--accent);
+  background: var(--accent-glow);
+  color: var(--text);
+  border-color: rgba(92,184,255,0.4);
 }
 
 .tab-panel {
   margin-top: 14px;
   display: none;
+  animation: fadeIn 0.2s ease;
 }
+
 .tab-panel.active { display: block; }
 
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Idea Card ─── */
 .idea-card {
-  margin-bottom: 12px;
+  margin-bottom: 14px;
   overflow: hidden;
 }
+
 .idea-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
-  padding: 11px 12px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--border);
 }
+
 .idea-meta {
   margin-top: 3px;
   color: var(--text-dim);
@@ -160,87 +226,90 @@ body {
   font-family: 'JetBrains Mono', monospace;
   word-break: break-word;
 }
+
 .idea-content {
-  max-height: 290px;
+  max-height: 300px;
   overflow: auto;
-  padding: 10px 12px;
-  background: rgba(8,13,20,0.62);
+  padding: 12px 14px;
+  background: rgba(6,10,16,0.5);
 }
+
 .idea-json {
   margin: 0;
-  color: #dbe9fb;
+  color: #c8d8ec;
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.55;
   font-family: 'JetBrains Mono', monospace;
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: anywhere;
 }
-.idea-doc {
-  display: grid;
-  gap: 10px;
-}
+
+.idea-doc { display: grid; gap: 10px; }
+
 .idea-field {
-  border: 1px solid rgba(47,71,97,0.85);
+  border: 1px solid rgba(28,46,68,0.7);
   border-radius: 8px;
-  background: rgba(16,27,43,0.62);
+  background: rgba(15,26,40,0.5);
   overflow: hidden;
 }
+
 .idea-key {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
   color: var(--accent-2);
   padding: 7px 10px;
-  border-bottom: 1px solid rgba(47,71,97,0.75);
-  background: rgba(18,30,47,0.82);
+  border-bottom: 1px solid rgba(28,46,68,0.6);
+  background: rgba(17,28,43,0.7);
 }
-.idea-val {
-  padding: 8px 10px;
-}
-.idea-obj {
-  display: grid;
-  gap: 8px;
-}
-.idea-array {
-  display: grid;
-  gap: 8px;
-}
+
+.idea-val { padding: 8px 10px; }
+.idea-obj { display: grid; gap: 8px; }
+.idea-array { display: grid; gap: 8px; }
+
 .idea-arr-item {
-  border: 1px solid rgba(47,71,97,0.68);
+  border: 1px solid rgba(28,46,68,0.5);
   border-radius: 7px;
   padding: 7px 8px;
-  background: rgba(12,20,32,0.58);
+  background: rgba(10,18,28,0.4);
 }
+
 .idea-arr-label {
-  font-size: 10px;
-  color: var(--text-dim);
-  letter-spacing: 0.05em;
+  font-size: 9px;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   margin-bottom: 4px;
+  font-weight: 600;
 }
+
 .idea-str {
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: anywhere;
   font-size: 13px;
   color: var(--text);
+  line-height: 1.5;
 }
+
 .idea-primitive {
   font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
-  color: #dbe9fb;
+  color: #c8d8ec;
 }
+
 .idea-empty {
   font-size: 12px;
   color: var(--text-dim);
   font-style: italic;
 }
 
+/* ─── Main Layout (Trajectory) ─── */
 .main {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 390px;
+  grid-template-columns: minmax(0, 1fr) 380px;
   gap: 14px;
   align-items: start;
 }
@@ -248,75 +317,95 @@ body {
 .card {
   border: 1px solid var(--border);
   border-radius: 14px;
-  background: linear-gradient(180deg, rgba(18,27,42,0.92), rgba(17,26,40,0.72));
-  box-shadow: 0 10px 30px rgba(0,0,0,0.28);
+  background: linear-gradient(180deg, rgba(17,28,43,0.88), rgba(12,18,25,0.72));
+  box-shadow:
+    0 1px 0 0 rgba(255,255,255,0.02) inset,
+    0 10px 32px rgba(0,0,0,0.3);
 }
 
+/* ─── Timeline ─── */
 .timeline-card { min-height: 72vh; }
+
 .timeline-top {
-  padding: 10px 12px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border);
 }
+
 .timeline-filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
+
 .tf-btn {
   border: 1px solid var(--border);
-  background: rgba(30,48,70,0.54);
+  background: rgba(24,40,56,0.5);
   color: var(--text-dim);
+  font-family: 'Outfit', sans-serif;
   font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  border-radius: 999px;
-  padding: 5px 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-radius: 6px;
+  padding: 4px 10px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
-.tf-btn:hover { border-color: var(--accent); color: #fff; }
-.tf-btn.active { box-shadow: 0 0 0 1px rgba(255,255,255,0.06) inset; }
+
+.tf-btn:hover { border-color: var(--border-hover); color: var(--text); }
+.tf-btn.active { box-shadow: 0 0 0 1px rgba(255,255,255,0.04) inset; }
 
 .timeline-panel {
   max-height: 72vh;
   overflow: auto;
-  padding: 12px;
+  padding: 10px 12px;
 }
 
+/* ─── Events ─── */
 .event {
-  border: 1px solid var(--border);
+  border: 1px solid rgba(28,46,68,0.5);
   border-left: 3px solid var(--border);
   border-radius: 10px;
-  background: rgba(20,31,48,0.88);
-  padding: 8px 10px;
-  margin-bottom: 7px;
+  background: rgba(17,28,43,0.7);
+  padding: 9px 11px;
+  margin-bottom: 6px;
   cursor: pointer;
-  transition: background 0.12s ease, border-color 0.12s ease;
+  transition: all 0.12s ease;
 }
-.event:hover { background: rgba(28,42,63,0.96); }
+
+.event:hover {
+  background: rgba(24,40,60,0.85);
+  border-color: rgba(28,46,68,0.7);
+}
+
 .event.selected {
-  border-color: rgba(53,194,255,0.7);
-  box-shadow: 0 0 0 1px rgba(53,194,255,0.22) inset;
+  border-color: rgba(92,184,255,0.5);
+  box-shadow: 0 0 0 1px rgba(92,184,255,0.15) inset;
+  background: rgba(28,46,68,0.5);
 }
+
 .event-header {
   display: flex;
   align-items: center;
   gap: 8px;
 }
+
 .event-step {
   min-width: 36px;
   font-size: 10px;
-  color: var(--text-dim);
+  color: var(--text-muted);
   font-family: 'JetBrains Mono', monospace;
+  font-weight: 500;
 }
+
 .event-type-tag {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  border-radius: 999px;
-  padding: 2px 8px;
+  border-radius: 5px;
+  padding: 2px 7px;
 }
+
 .event-summary {
   font-size: 12.5px;
   color: var(--text);
@@ -324,320 +413,475 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 500;
 }
+
 .event-tokens {
-  color: var(--text-dim);
+  color: var(--text-muted);
   font-family: 'JetBrains Mono', monospace;
   font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
 }
+
 .event-detail {
-  margin-top: 7px;
-  padding: 8px;
+  margin-top: 8px;
+  padding: 10px;
   border-radius: 8px;
-  border: 1px solid rgba(53,194,255,0.2);
-  background: rgba(8,13,20,0.62);
-  color: #bbd0e8;
+  border: 1px solid rgba(28,46,68,0.5);
+  background: rgba(6,10,16,0.55);
+  color: #a8c0d8;
   font-size: 11px;
   font-family: 'JetBrains Mono', monospace;
   white-space: pre-wrap;
   word-break: break-word;
   display: none;
-  max-height: 260px;
+  max-height: 280px;
   overflow: auto;
+  line-height: 1.5;
 }
-.event.expanded .event-detail { display: block; }
 
-.ev-literature_review { border-left-color: #9e8dff !important; }
-.ev-submission { border-left-color: #ff6f91 !important; }
-.ev-experiment { border-left-color: #4ce0b3 !important; }
-.ev-paper_write { border-left-color: #35c2ff !important; }
-.ev-plotting { border-left-color: #5de0ff !important; }
-.ev-git_clone, .ev-pip_install { border-left-color: #ffbf69 !important; }
-.ev-bash, .ev-file_read, .ev-file_write, .ev-text, .ev-thinking, .ev-task_mgmt { border-left-color: #6f859f !important; }
+.event.expanded .event-detail { display: block; animation: slideDown 0.15s ease; }
+
+@keyframes slideDown {
+  from { opacity: 0; max-height: 0; }
+  to { opacity: 1; max-height: 280px; }
+}
+
+/* Event type left border colors */
+.ev-literature_review { border-left-color: #a07cff !important; }
+.ev-submission { border-left-color: #ff6a96 !important; }
+.ev-experiment { border-left-color: #3dd9a4 !important; }
+.ev-paper_write { border-left-color: #5cb8ff !important; }
+.ev-plotting { border-left-color: #60e6ff !important; }
+.ev-git_clone, .ev-pip_install { border-left-color: #ffaa44 !important; }
+.ev-bash, .ev-file_read, .ev-file_write, .ev-text, .ev-thinking, .ev-task_mgmt { border-left-color: #5a7490 !important; }
 .ev-web, .ev-user_message { border-left-color: var(--warm) !important; }
-.ev-tool_result { border-left-color: #466584 !important; }
+.ev-tool_result { border-left-color: #3a5a78 !important; }
 .ev-system { border-left-color: var(--accent) !important; }
-.ev-subagent { border-left-color: #ff9f87 !important; }
+.ev-subagent { border-left-color: #ff9a80 !important; }
 
+/* ─── Side Panels ─── */
 .side {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
-.panel {
-  padding: 12px;
-}
+
+.panel { padding: 14px; }
+
 .panel-title {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--text-dim);
-  margin-bottom: 8px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
 }
+
 .chart-container { position: relative; height: 190px; }
 .donut-container { position: relative; height: 170px; }
 
-.tool-table { width: 100%; font-size: 12px; }
-.tool-table td { padding: 2px 4px; }
+.tool-table { width: 100%; font-size: 12px; border-spacing: 0; }
+.tool-table td { padding: 3px 4px; }
 .tool-table td:nth-child(2), .tool-table td:nth-child(3) {
   text-align: right;
   color: var(--text-dim);
   font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
 }
 
+/* ─── Submissions Layout ─── */
 .submissions-layout {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: 300px minmax(0, 1fr);
   gap: 14px;
   align-items: start;
 }
+
 .submissions-nav {
-  padding: 12px;
+  padding: 14px;
   max-height: 76vh;
   overflow: auto;
 }
+
 .sub-nav-list {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 6px;
 }
+
 .sub-nav-item {
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: rgba(17,28,43,0.72);
+  background: rgba(15,26,40,0.6);
   color: var(--text);
   width: 100%;
   text-align: left;
-  padding: 9px 10px;
+  padding: 10px 12px;
   cursor: pointer;
+  font-family: 'Outfit', sans-serif;
+  transition: all 0.15s ease;
 }
-.sub-nav-item:hover { border-color: rgba(53,194,255,0.5); }
+
+.sub-nav-item:hover {
+  border-color: var(--border-hover);
+  background: rgba(24,40,56,0.5);
+}
+
 .sub-nav-item.active {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px rgba(53,194,255,0.25) inset;
-  background: rgba(30,48,70,0.76);
+  border-color: rgba(92,184,255,0.4);
+  box-shadow: 0 0 0 1px rgba(92,184,255,0.12) inset;
+  background: rgba(28,46,68,0.5);
 }
+
 .sub-nav-top {
   display: flex;
   align-items: center;
   gap: 8px;
 }
+
 .sub-nav-version {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
   color: var(--accent-2);
 }
+
 .sub-nav-time {
   font-size: 11px;
   color: var(--text-dim);
-  margin-top: 2px;
+  margin-top: 3px;
 }
 
+/* ─── Submission Dossier ─── */
 .submission-dossier {
-  padding: 14px;
+  padding: 16px;
   min-height: 76vh;
 }
+
 .dossier-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
+
 .dossier-title {
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-family: 'Crimson Pro', serif;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
+
 .dossier-title-sub {
   font-size: 11px;
   color: var(--text-dim);
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  margin-top: 2px;
 }
 
 .submission-entry {
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: rgba(17,28,43,0.72);
+  background: rgba(15,26,40,0.5);
   overflow: hidden;
 }
+
 .entry-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border);
-  background: rgba(26,38,56,0.65);
+  background: rgba(24,40,56,0.4);
 }
+
 .sub-version {
-  background: rgba(76,224,179,0.2);
+  background: var(--accent2-glow);
   color: var(--accent-2);
   font-size: 11px;
-  font-weight: 800;
-  border-radius: 999px;
+  font-weight: 700;
+  border-radius: 6px;
   padding: 3px 10px;
+  letter-spacing: 0.02em;
 }
+
 .sub-time {
   font-size: 12px;
   color: var(--text-dim);
 }
+
 .sub-mode {
   margin-left: auto;
   font-size: 10px;
-  padding: 2px 7px;
-  border-radius: 999px;
-  background: rgba(53,194,255,0.2);
+  padding: 2px 8px;
+  border-radius: 5px;
+  background: var(--accent-glow);
   color: var(--accent);
   text-transform: uppercase;
   letter-spacing: 0.06em;
+  font-weight: 600;
 }
 
 .submission-body {
-  padding: 12px;
+  padding: 14px;
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
+
 .paper-actions {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
+
 .pdf-btn {
   border: 1px solid var(--border);
-  border-radius: 999px;
-  background: rgba(53,194,255,0.16);
+  border-radius: 8px;
+  background: var(--accent-glow);
   color: var(--accent);
+  font-family: 'Outfit', sans-serif;
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  padding: 6px 10px;
+  padding: 7px 12px;
   cursor: pointer;
+  transition: all 0.15s ease;
 }
-.pdf-btn:hover { border-color: var(--accent); }
+
+.pdf-btn:hover {
+  border-color: var(--accent);
+  background: rgba(92,184,255,0.22);
+}
+
 .pdf-link {
   color: var(--accent);
   text-decoration: none;
   font-size: 12px;
   font-weight: 600;
+  transition: opacity 0.15s ease;
 }
-.pdf-link:hover { text-decoration: underline; }
+
+.pdf-link:hover { opacity: 0.8; }
+
 .paper-wrap {
   border: 1px solid var(--border);
   border-radius: 10px;
   overflow: hidden;
-  background: rgba(8,13,20,0.68);
+  background: rgba(6,10,16,0.5);
 }
+
 .paper-wrap iframe {
   border: 0;
   width: 100%;
-  min-height: 420px;
+  min-height: 440px;
   background: #fff;
 }
+
 .paper-empty {
-  padding: 16px;
+  padding: 20px;
   color: var(--text-dim);
   font-size: 12px;
 }
+
 .pdfjs-toolbar {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 10px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--border);
-  background: rgba(18,27,42,0.82);
+  background: rgba(17,28,43,0.75);
 }
+
 .pdfjs-status {
   color: var(--text-dim);
   font-size: 12px;
   font-family: 'JetBrains Mono', monospace;
+  font-weight: 500;
 }
+
 .pdfjs-spacer { flex: 1; }
+
 .pdfjs-canvas-wrap {
-  padding: 10px;
+  padding: 12px;
   display: flex;
   justify-content: center;
   overflow: auto;
+  background: rgba(6,10,16,0.3);
 }
+
 .pdfjs-canvas {
   max-width: 100%;
   height: auto;
-  box-shadow: 0 10px 24px rgba(0,0,0,0.34);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
   background: #fff;
+  border-radius: 2px;
 }
+
 .pdf-fallback-note {
-  padding: 8px 10px;
+  padding: 8px 12px;
   border-top: 1px solid var(--border);
-  color: var(--text-dim);
+  color: var(--text-muted);
   font-size: 11px;
 }
 
+/* ─── Markdown Sections ─── */
 .md-section {
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: rgba(8,13,20,0.55);
-  padding: 10px;
+  background: rgba(6,10,16,0.4);
+  padding: 14px;
 }
+
 .md-section h4 {
-  font-size: 12px;
+  font-size: 10px;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-dim);
-  margin-bottom: 8px;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-bottom: 10px;
 }
+
 .md-content {
   font-size: 13px;
   color: var(--text);
+  line-height: 1.6;
 }
+
 .md-content p { margin: 0 0 8px; }
 .md-content p:last-child { margin-bottom: 0; }
+
 .md-content pre {
-  background: rgba(7,11,15,0.85);
+  background: rgba(6,10,16,0.7);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 8px;
+  padding: 10px 12px;
   overflow: auto;
   font-size: 11px;
   font-family: 'JetBrains Mono', monospace;
+  line-height: 1.5;
 }
+
 .md-content code {
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
+  background: rgba(28,46,68,0.4);
+  padding: 1px 5px;
+  border-radius: 4px;
 }
+
+.md-content pre code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+}
+
 .md-content a {
   color: var(--accent);
   text-decoration: none;
 }
+
+.md-content a:hover { text-decoration: underline; }
+
 .md-content ul, .md-content ol {
-  margin: 0 0 8px 18px;
+  margin: 0 0 8px 20px;
 }
-.md-empty {
+
+.md-content h1, .md-content h2, .md-content h3, .md-content h4, .md-content h5 {
+  margin: 16px 0 8px;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.md-content h1 { font-size: 18px; }
+.md-content h2 { font-size: 16px; }
+.md-content h3 { font-size: 14px; }
+
+.md-content blockquote {
+  border-left: 3px solid var(--accent);
+  padding-left: 12px;
+  margin: 8px 0;
   color: var(--text-dim);
+}
+
+.md-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0;
   font-size: 12px;
 }
 
+.md-content table th, .md-content table td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.md-content table th {
+  background: rgba(24,40,56,0.4);
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+}
+
+.md-empty {
+  color: var(--text-dim);
+  font-size: 12px;
+  font-style: italic;
+}
+
 .sub-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+
 .sub-badge {
   font-size: 10px;
-  border-radius: 999px;
+  border-radius: 5px;
   padding: 2px 8px;
   border: 1px solid var(--border);
   color: var(--text-dim);
+  font-weight: 600;
 }
 
 .no-data {
-  padding: 20px;
+  padding: 24px;
   text-align: center;
   color: var(--text-dim);
+  font-size: 13px;
 }
 
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: #385470; border-radius: 999px; }
+.help-strip {
+  margin-top: 10px;
+  padding: 8px 14px;
+  border: 1px solid rgba(28,46,68,0.4);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+  background: rgba(17,28,43,0.3);
+}
 
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(56,84,112,0.5); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(56,84,112,0.8); }
+
+/* ─── Focus / Selection ─── */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: rgba(92,184,255,0.25);
+  color: var(--text);
+}
+
+/* ─── Responsive ─── */
 @media (max-width: 1100px) {
   .submissions-layout { grid-template-columns: 1fr; }
   .submissions-nav { max-height: none; }
@@ -650,8 +894,9 @@ body {
   .header {
     flex-wrap: wrap;
     gap: 10px;
-    padding: 12px;
+    padding: 14px;
   }
+  .header h1 { max-width: 100%; }
   .header-stats {
     margin-left: 0;
     width: 100%;
@@ -660,6 +905,7 @@ body {
   .stat { align-items: flex-start; }
   .stat .val { font-size: 16px; }
   .paper-wrap iframe { min-height: 340px; }
+  .page { padding: 14px 10px 24px; }
 }
 </style>
 </head>
@@ -670,7 +916,7 @@ body {
     <h1 id="job-title">{{JOB_ID}}</h1>
     <span class="status-badge" id="status-badge">...</span>
     <span class="model-badge" id="model-badge">...</span>
-    <a id="gitlab-link" href="#" target="_blank" rel="noopener" style="display:none; margin-left:8px; font-size:12px; color:#fc6d26; text-decoration:none; border:1px solid rgba(252,109,38,0.3); border-radius:999px; padding:4px 10px;">GitLab</a>
+    <a id="gitlab-link" href="#" target="_blank" rel="noopener" style="display:none; margin-left:8px; font-size:11px; color:#fc6d26; text-decoration:none; border:1px solid rgba(252,109,38,0.25); border-radius:6px; padding:4px 10px; font-weight:600; letter-spacing:0.04em;">GitLab</a>
     <div class="header-stats">
       <div class="stat"><span class="val" id="stat-events">-</span>events</div>
       <div class="stat"><span class="val" id="stat-tokens">-</span>tokens</div>
@@ -683,19 +929,19 @@ body {
     <button class="tab-btn active" data-tab="submissions">Submissions</button>
     <button class="tab-btn" data-tab="trajectory">Trajectory</button>
   </div>
-  <div class="help-strip">Job: one full run. Trajectory: chronological agent actions. Submission: a saved paper version with review and rebuttal.</div>
+  <div class="help-strip">Submission: a saved paper version with review and rebuttal. Trajectory: chronological agent actions.</div>
 
   <div class="tab-panel" id="tab-trajectory">
     <div class="card idea-card">
       <div class="idea-head">
         <div>
-          <div class="panel-title">Model Input — Original Idea JSON</div>
-          <div class="idea-meta" id="idea-meta">Resolving idea source…</div>
+          <div class="panel-title">Model Input — Original Idea</div>
+          <div class="idea-meta" id="idea-meta">Resolving idea source...</div>
         </div>
         <button class="pdf-btn" id="idea-view-toggle" style="display:none;">Show Raw JSON</button>
       </div>
       <div class="idea-content" id="idea-content">
-        <div class="no-data">Loading idea input…</div>
+        <div class="no-data">Loading idea input...</div>
       </div>
     </div>
 
@@ -773,25 +1019,25 @@ let pdfJsLoadPromise = null;
 const PDFJS_SRC = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js';
 
 const EVENT_TYPES = {
-  literature_review: { label: 'Literature', color: '#9e8dff' },
-  submission: { label: 'Submission', color: '#ff6f91' },
-  experiment: { label: 'Experiment', color: '#4ce0b3' },
-  paper_write: { label: 'Paper', color: '#35c2ff' },
-  plotting: { label: 'Plotting', color: '#5de0ff' },
-  git_clone: { label: 'Git', color: '#ffbf69' },
-  pip_install: { label: 'Install', color: '#ffbf69' },
-  bash: { label: 'Bash', color: '#6f859f' },
-  web: { label: 'Web', color: '#ffbf69' },
-  file_read: { label: 'Read', color: '#6f859f' },
-  file_write: { label: 'Write', color: '#6f859f' },
-  subagent: { label: 'Subagent', color: '#ff9f87' },
-  thinking: { label: 'Thinking', color: '#6f859f' },
-  text: { label: 'Text', color: '#6f859f' },
-  tool_result: { label: 'Result', color: '#466584' },
-  task_mgmt: { label: 'TaskMgmt', color: '#6f859f' },
-  system: { label: 'System', color: '#35c2ff' },
-  user_message: { label: 'User', color: '#ffbf69' },
-  other: { label: 'Other', color: '#30363d' },
+  literature_review: { label: 'Literature', color: '#a07cff' },
+  submission: { label: 'Submission', color: '#ff6a96' },
+  experiment: { label: 'Experiment', color: '#3dd9a4' },
+  paper_write: { label: 'Paper', color: '#5cb8ff' },
+  plotting: { label: 'Plotting', color: '#60e6ff' },
+  git_clone: { label: 'Git', color: '#ffaa44' },
+  pip_install: { label: 'Install', color: '#ffaa44' },
+  bash: { label: 'Bash', color: '#5a7490' },
+  web: { label: 'Web', color: '#ffaa44' },
+  file_read: { label: 'Read', color: '#5a7490' },
+  file_write: { label: 'Write', color: '#5a7490' },
+  subagent: { label: 'Subagent', color: '#ff9a80' },
+  thinking: { label: 'Thinking', color: '#5a7490' },
+  text: { label: 'Text', color: '#5a7490' },
+  tool_result: { label: 'Result', color: '#3a5a78' },
+  task_mgmt: { label: 'TaskMgmt', color: '#5a7490' },
+  system: { label: 'System', color: '#5cb8ff' },
+  user_message: { label: 'User', color: '#ffaa44' },
+  other: { label: 'Other', color: '#2a3a4e' },
 };
 
 function formatTokens(n) {
@@ -923,10 +1169,10 @@ async function renderPdfWithPdfJs(url, container) {
   container.innerHTML = `
     <div class="pdfjs-toolbar">
       <button class="pdf-btn" id="pdf-prev-btn">Prev</button>
-      <span class="pdfjs-status" id="pdf-page-status">Loading PDF…</span>
+      <span class="pdfjs-status" id="pdf-page-status">Loading PDF...</span>
       <button class="pdf-btn" id="pdf-next-btn">Next</button>
       <span class="pdfjs-spacer"></span>
-      <a class="pdf-link" href="${encodeURI(url)}" target="_blank" rel="noopener noreferrer">Open PDF in new tab</a>
+      <a class="pdf-link" href="${encodeURI(url)}" target="_blank" rel="noopener noreferrer">Open in new tab</a>
     </div>
     <div class="pdfjs-canvas-wrap"><canvas class="pdfjs-canvas" id="pdf-preview-canvas"></canvas></div>
   `;
@@ -949,7 +1195,7 @@ async function renderPdfWithPdfJs(url, container) {
     rendering = true;
     try {
       pageNum = Math.max(1, Math.min(targetPage, pdfDoc.numPages));
-      statusEl.textContent = `Rendering page ${pageNum}…`;
+      statusEl.textContent = `Rendering page ${pageNum}...`;
 
       const page = await pdfDoc.getPage(pageNum);
       const baseViewport = page.getViewport({ scale: 1.0 });
@@ -988,7 +1234,7 @@ async function renderPdfWithPdfJs(url, container) {
 function renderPdfFallback(url, container) {
   container.innerHTML = `
     <iframe loading="lazy" src="${encodeURI(url)}#toolbar=0&navpanes=0&statusbar=0"></iframe>
-    <div class="pdf-fallback-note">Inline browser preview fallback. If this still downloads, use "Open PDF in new tab".</div>
+    <div class="pdf-fallback-note">Inline browser preview fallback. If this still downloads, use "Open in new tab".</div>
   `;
 }
 
@@ -1006,7 +1252,7 @@ async function loadIdeaInput() {
     if (!data.found) {
       const stem = data.stem ? ` (stem: ${data.stem})` : '';
       meta.textContent = `No matching idea JSON found${stem}.`;
-      content.innerHTML = '<div class="no-data">Could not resolve `idea_<stem>.json` for this job.</div>';
+      content.innerHTML = '<div class="no-data">Could not resolve idea JSON for this job.</div>';
       if (toggle) toggle.style.display = 'none';
       return;
     }
@@ -1067,9 +1313,9 @@ function renderFilterButtons() {
   allBtn.className = 'tf-btn' + (activeFilters.size === 0 ? ' active' : '');
   allBtn.textContent = 'All';
   if (activeFilters.size === 0) {
-    allBtn.style.background = 'rgba(53,194,255,0.22)';
+    allBtn.style.background = 'rgba(92,184,255,0.15)';
     allBtn.style.color = '#fff';
-    allBtn.style.borderColor = '#35c2ff';
+    allBtn.style.borderColor = 'rgba(92,184,255,0.4)';
   }
   allBtn.onclick = () => { activeFilters.clear(); renderFilterButtons(); renderTimeline(); };
   container.appendChild(allBtn);
@@ -1080,8 +1326,8 @@ function renderFilterButtons() {
     const isActive = activeFilters.has(type);
     btn.className = 'tf-btn' + (isActive ? ' active' : '');
     if (isActive) {
-      btn.style.background = cfg.color + '33';
-      btn.style.borderColor = cfg.color;
+      btn.style.background = cfg.color + '22';
+      btn.style.borderColor = cfg.color + '66';
       btn.style.color = '#fff';
     }
     btn.textContent = `${cfg.label} (${counts[type]})`;
@@ -1110,7 +1356,7 @@ function createEventEl(ev) {
   div.innerHTML = `
     <div class="event-header">
       <span class="event-step">#${ev.step}</span>
-      <span class="event-type-tag" style="background:${cfg.color}2a;color:${cfg.color}">${cfg.label}</span>
+      <span class="event-type-tag" style="background:${cfg.color}1a;color:${cfg.color}">${cfg.label}</span>
       <span class="event-summary" title="${escHtml(ev.summary)}">${escHtml(ev.summary)}</span>
       ${tokensHtml}
     </div>
@@ -1128,7 +1374,6 @@ function createEventEl(ev) {
       return;
     }
     div.classList.add('selected');
-    // Lazy-load detail on first click.
     if (ev.detail && !div.querySelector('.event-detail')) {
       const detailEl = document.createElement('div');
       detailEl.className = 'event-detail';
@@ -1151,18 +1396,16 @@ function renderTimeline() {
     filtered = allEvents.filter(e => activeFilters.has(e.event_type));
   }
 
-  // Show all events (virtualized rendering for large sets).
   const MAX_INITIAL = 2000;
   const toRender = filtered.length > MAX_INITIAL ? filtered.slice(-MAX_INITIAL) : filtered;
   const frag = document.createDocumentFragment();
   toRender.forEach(ev => frag.appendChild(createEventEl(ev)));
   container.appendChild(frag);
 
-  // Show "load earlier" button if events were truncated.
   if (filtered.length > MAX_INITIAL) {
     const btn = document.createElement('button');
     btn.textContent = `Load ${filtered.length - MAX_INITIAL} earlier events`;
-    btn.style.cssText = 'margin:8px auto;display:block;padding:6px 16px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;font-size:12px;';
+    btn.style.cssText = 'margin:8px auto;display:block;padding:7px 16px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;font-size:12px;font-family:Outfit,sans-serif;font-weight:600;';
     btn.onclick = () => {
       btn.remove();
       const earlier = filtered.slice(0, filtered.length - MAX_INITIAL);
@@ -1197,9 +1440,9 @@ function initTokenChart() {
     data: {
       labels: [],
       datasets: [
-        { label: 'Output', data: [], borderColor: '#4ce0b3', backgroundColor: 'rgba(76,224,179,0.09)', fill: true, tension: 0.28, pointRadius: 0, borderWidth: 2 },
-        { label: 'Input', data: [], borderColor: '#35c2ff', backgroundColor: 'rgba(53,194,255,0.10)', fill: true, tension: 0.28, pointRadius: 0, borderWidth: 2 },
-        { label: 'Cache Read', data: [], borderColor: '#9e8dff', backgroundColor: 'rgba(158,141,255,0.1)', fill: true, tension: 0.28, pointRadius: 0, borderWidth: 2 },
+        { label: 'Output', data: [], borderColor: '#3dd9a4', backgroundColor: 'rgba(61,217,164,0.08)', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 1.5 },
+        { label: 'Input', data: [], borderColor: '#5cb8ff', backgroundColor: 'rgba(92,184,255,0.08)', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 1.5 },
+        { label: 'Cache Read', data: [], borderColor: '#a07cff', backgroundColor: 'rgba(160,124,255,0.08)', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 1.5 },
       ]
     },
     options: {
@@ -1207,12 +1450,19 @@ function initTokenChart() {
       maintainAspectRatio: false,
       interaction: { intersect: false, mode: 'index' },
       plugins: {
-        legend: { position: 'top', labels: { boxWidth: 12, font: { size: 10 }, color: '#9eb3cb' } },
-        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${formatTokens(ctx.raw)}` } }
+        legend: { position: 'top', labels: { boxWidth: 10, font: { size: 10, family: 'Outfit' }, color: '#6e88a6', padding: 8 } },
+        tooltip: {
+          backgroundColor: 'rgba(12,18,25,0.92)',
+          borderColor: 'rgba(28,46,68,0.6)',
+          borderWidth: 1,
+          titleFont: { family: 'Outfit', size: 11 },
+          bodyFont: { family: 'JetBrains Mono', size: 10 },
+          callbacks: { label: ctx => `${ctx.dataset.label}: ${formatTokens(ctx.raw)}` }
+        }
       },
       scales: {
-        x: { grid: { color: '#1f2d43' }, ticks: { color: '#6f859f', font: { size: 9 }, maxTicksLimit: 8 } },
-        y: { grid: { color: '#1f2d43' }, ticks: { color: '#6f859f', font: { size: 9 }, callback: v => formatTokens(v) } }
+        x: { grid: { color: 'rgba(28,46,68,0.3)' }, ticks: { color: '#3e5670', font: { size: 9, family: 'JetBrains Mono' }, maxTicksLimit: 8 } },
+        y: { grid: { color: 'rgba(28,46,68,0.3)' }, ticks: { color: '#3e5670', font: { size: 9, family: 'JetBrains Mono' }, callback: v => formatTokens(v) } }
       }
     }
   });
@@ -1235,8 +1485,17 @@ function initToolChart() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      cutout: '62%',
-      plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 }, color: '#9eb3cb', padding: 6 } } }
+      cutout: '65%',
+      plugins: {
+        legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10, family: 'Outfit' }, color: '#6e88a6', padding: 6 } },
+        tooltip: {
+          backgroundColor: 'rgba(12,18,25,0.92)',
+          borderColor: 'rgba(28,46,68,0.6)',
+          borderWidth: 1,
+          titleFont: { family: 'Outfit', size: 11 },
+          bodyFont: { family: 'JetBrains Mono', size: 10 },
+        }
+      }
     }
   });
 }
@@ -1250,7 +1509,7 @@ function updateToolChart(breakdown) {
     document.getElementById('tool-table').innerHTML = '';
     return;
   }
-  const colors = ['#35c2ff','#4ce0b3','#9e8dff','#ff6f91','#ffbf69','#5de0ff','#6f859f','#ff9f87','#8ea2b8','#ff7e7e'];
+  const colors = ['#5cb8ff','#3dd9a4','#a07cff','#ff6a96','#ffaa44','#60e6ff','#5a7490','#ff9a80','#7b94b0','#ff6670'];
   toolChart.data.labels = breakdown.map(b => b.tool);
   toolChart.data.datasets[0].data = breakdown.map(b => b.count);
   toolChart.data.datasets[0].backgroundColor = breakdown.map((_, i) => colors[i % colors.length]);
@@ -1273,8 +1532,17 @@ function initActivityChart() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      cutout: '62%',
-      plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 }, color: '#9eb3cb', padding: 6 } } }
+      cutout: '65%',
+      plugins: {
+        legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10, family: 'Outfit' }, color: '#6e88a6', padding: 6 } },
+        tooltip: {
+          backgroundColor: 'rgba(12,18,25,0.92)',
+          borderColor: 'rgba(28,46,68,0.6)',
+          borderWidth: 1,
+          titleFont: { family: 'Outfit', size: 11 },
+          bodyFont: { family: 'JetBrains Mono', size: 10 },
+        }
+      }
     }
   });
 }
@@ -1289,7 +1557,7 @@ function updateActivityChart(breakdown) {
   }
   activityChart.data.labels = breakdown.map(b => (EVENT_TYPES[b.type] || {}).label || b.type);
   activityChart.data.datasets[0].data = breakdown.map(b => b.count);
-  activityChart.data.datasets[0].backgroundColor = breakdown.map(b => (EVENT_TYPES[b.type] || {}).color || '#30363d');
+  activityChart.data.datasets[0].backgroundColor = breakdown.map(b => (EVENT_TYPES[b.type] || {}).color || '#2a3a4e');
   activityChart.update('none');
 }
 
@@ -1339,7 +1607,7 @@ function renderSubmissionDetail() {
   const review = renderMarkdown(s.review_markdown || s.review || '');
   const rebuttal = s.rebuttal_markdown || s.rebuttal;
   const rebuttalHtml = rebuttal ? renderMarkdown(rebuttal) : '<p class="md-empty">No rebuttal recorded.</p>';
-  meta.textContent = `Version v${s.version ?? '?'} • ${formatTimestamp(s.timestamp) || 'Unknown time'}`;
+  meta.textContent = `Version v${s.version ?? '?'} \u00B7 ${formatTimestamp(s.timestamp) || 'Unknown time'}`;
 
   container.innerHTML = `
     <article class="submission-entry">
@@ -1382,7 +1650,7 @@ function renderSubmissionDetail() {
   if (previewBtn && previewWrap && s.paper_url) {
     const showPreview = async () => {
       if (!previewWrap.dataset.loaded) {
-        previewWrap.innerHTML = '<div class="paper-empty">Loading PDF preview…</div>';
+        previewWrap.innerHTML = '<div class="paper-empty">Loading PDF preview...</div>';
         let rendered = false;
         try {
           const pdfReady = await ensurePdfJs();
@@ -1518,6 +1786,7 @@ function startSSE() {
   evtSource = new EventSource(`/api/jobs/${JOB_ID}/stream?after=${lastStep}`);
 
   evtSource.addEventListener('new_event', (e) => {
+    startSSE._failures = 0;
     const event = JSON.parse(e.data);
     appendEvent(event);
     lastStep = Math.max(lastStep, (event.line_num || 0) + 1);
@@ -1536,11 +1805,19 @@ function startSSE() {
     if (typeof m.total_lines === 'number') lastStep = Math.max(lastStep, m.total_lines);
   });
 
-  evtSource.onerror = () => {
+  evtSource.onerror = (e) => {
     evtSource.close();
-    // Only retry if the job is still running. In gitlab mode, SSE returns 404
-    // for all jobs (they're completed), so don't retry endlessly.
-    if (isLive) setTimeout(() => startSSE(), 5000);
+    // Don't retry if we got a non-retryable error (404 in gitlab mode, etc).
+    // EventSource fires onerror on HTTP errors before readyState goes to CLOSED.
+    // After 3 consecutive failures, stop retrying to avoid log spam.
+    if (!isLive) return;
+    if (!startSSE._failures) startSSE._failures = 0;
+    startSSE._failures++;
+    if (startSSE._failures > 3) {
+      isLive = false;
+      return;
+    }
+    setTimeout(() => startSSE(), 5000);
   };
 
   if (tokenRefreshTimer) clearInterval(tokenRefreshTimer);
