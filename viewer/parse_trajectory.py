@@ -3,8 +3,19 @@
 import json
 import os
 import re
+import sys
 from dataclasses import dataclass, field, asdict
-from typing import Optional
+from pathlib import Path
+from typing import Any, List, Optional
+
+# Import shared sanitization module.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+from sanitize_secrets import (  # noqa: E402
+    REDACTION,
+    get_default_sanitizer as _get_sanitizer,
+    sanitize_text as _sanitize_text,
+    sanitize_json as _sanitize_json,
+)
 
 
 @dataclass
@@ -50,6 +61,58 @@ class ParseResult:
         }
 
 
+def mask_secrets_in_text(text: str) -> str:
+    """Mask secrets/tokens in a string for safe display."""
+    return _sanitize_text(text)
+
+
+def mask_secrets(value: Any) -> Any:
+    """Recursively mask secrets in nested objects."""
+    return _sanitize_json(value)
+
+
+def _mask_events(events: List[Event]) -> None:
+    for ev in events:
+        ev.summary = mask_secrets_in_text(ev.summary or "")
+        if ev.detail:
+            ev.detail = mask_secrets_in_text(ev.detail)
+
+
+def _estimate_tokens_from_chars(char_count: int) -> int:
+    """Estimate token count from character count.
+
+    Approximation: ~3.5 chars per token for code-heavy content (Claude tokenizer).
+    English prose averages ~4 chars/token, but code, JSON, and tool args are denser.
+    """
+    if char_count <= 0:
+        return 0
+    return max(1, int(char_count / 3.5))
+
+
+def _estimate_output_tokens_from_content(content_blocks: list) -> int:
+    """Estimate output tokens from actual content blocks in Claude Code JSONL.
+
+    The usage.output_tokens field is unreliable (per-block streaming deltas).
+    This estimates from the real text content the model produced.
+    """
+    total_chars = 0
+    for block in content_blocks:
+        block_type = block.get("type", "")
+        if block_type == "thinking":
+            total_chars += len(block.get("thinking", ""))
+        elif block_type == "text":
+            total_chars += len(block.get("text", ""))
+        elif block_type == "tool_use":
+            # Tool name + serialized input arguments.
+            total_chars += len(block.get("name", ""))
+            inp = block.get("input", {})
+            if isinstance(inp, dict):
+                total_chars += len(json.dumps(inp, ensure_ascii=False))
+            elif isinstance(inp, str):
+                total_chars += len(inp)
+    return _estimate_tokens_from_chars(total_chars)
+
+
 def _extract_tokens(usage: dict) -> TokenInfo:
     if not usage:
         return TokenInfo()
@@ -63,14 +126,21 @@ def _extract_tokens(usage: dict) -> TokenInfo:
 
 def _categorize_tool(name: str, tool_input: dict) -> str:
     """Categorize a tool call into an event_type."""
+    lname = (name or "").lower()
+
     if name == "Skill":
         skill = tool_input.get("skill", "")
         if "search-papers" in skill:
             return "literature_review"
         return "other"
 
-    if name == "Bash":
-        cmd = tool_input.get("command", "")
+    if name == "Bash" or lname in {"run_shell_command", "run_command", "execute_command", "bash"}:
+        cmd = (
+            tool_input.get("command")
+            or tool_input.get("cmd")
+            or tool_input.get("bash_command")
+            or ""
+        )
         if "submit_for_review" in cmd or "extract_and_generate_questions" in cmd:
             return "submission"
         if "git clone" in cmd:
@@ -87,12 +157,17 @@ def _categorize_tool(name: str, tool_input: dict) -> str:
             return "literature_review"
         return "bash"
 
-    if name in ("Read", "Glob", "Grep"):
+    if name in ("Read", "Glob", "Grep") or lname in {
+        "read_file",
+        "grep_search",
+        "glob_search",
+        "list_directory",
+    }:
         return "file_read"
 
-    if name in ("Write", "Edit"):
+    if name in ("Write", "Edit") or lname in {"write_file", "edit_file", "update_file", "replace_in_file"}:
         # Check if writing to tex/bib or figures
-        path = tool_input.get("file_path", "")
+        path = tool_input.get("file_path") or tool_input.get("path") or ""
         if any(ext in path for ext in [".tex", ".bib"]) or "/latex/" in path:
             return "paper_write"
         if "/figures/" in path:
@@ -102,10 +177,15 @@ def _categorize_tool(name: str, tool_input: dict) -> str:
     if name == "Task":
         return "subagent"
 
-    if name in ("WebFetch", "WebSearch"):
+    if name in ("WebFetch", "WebSearch") or lname in {
+        "web_fetch",
+        "web_search",
+        "fetch_url",
+        "google_search",
+    }:
         return "web"
 
-    if name in ("TodoWrite", "TaskOutput", "TaskStop"):
+    if name in ("TodoWrite", "TaskCreate", "TaskUpdate", "TaskGet", "TaskList", "TaskOutput", "TaskStop"):
         return "task_mgmt"
 
     return "other"
@@ -113,44 +193,51 @@ def _categorize_tool(name: str, tool_input: dict) -> str:
 
 def _summarize_tool(name: str, tool_input: dict, event_type: str) -> str:
     """Create a human-readable summary for a tool call."""
-    if name == "Bash":
+    lname = (name or "").lower()
+
+    if name == "Bash" or lname in {"run_shell_command", "run_command", "execute_command", "bash"}:
         desc = tool_input.get("description", "")
         if desc:
             return f"Bash: {desc}"
-        cmd = tool_input.get("command", "")
+        cmd = (
+            tool_input.get("command")
+            or tool_input.get("cmd")
+            or tool_input.get("bash_command")
+            or ""
+        )
         # Truncate long commands
         first_line = cmd.split("\n")[0][:120]
         return f"Bash: {first_line}"
 
-    if name == "Read":
-        path = tool_input.get("file_path", "")
+    if name == "Read" or lname == "read_file":
+        path = tool_input.get("file_path") or tool_input.get("path") or ""
         short = os.path.basename(path) if path else "?"
         return f"Read: {short}"
 
-    if name == "Write":
-        path = tool_input.get("file_path", "")
+    if name == "Write" or lname == "write_file":
+        path = tool_input.get("file_path") or tool_input.get("path") or ""
         short = os.path.basename(path) if path else "?"
         return f"Write: {short}"
 
-    if name == "Edit":
-        path = tool_input.get("file_path", "")
+    if name == "Edit" or lname in {"edit_file", "update_file", "replace_in_file"}:
+        path = tool_input.get("file_path") or tool_input.get("path") or ""
         short = os.path.basename(path) if path else "?"
         return f"Edit: {short}"
 
-    if name == "Glob":
+    if name == "Glob" or lname == "glob_search":
         pattern = tool_input.get("pattern", "")
         return f"Glob: {pattern}"
 
-    if name == "Grep":
+    if name == "Grep" or lname == "grep_search":
         pattern = tool_input.get("pattern", "")
         return f"Grep: {pattern[:80]}"
 
-    if name == "WebFetch":
+    if name == "WebFetch" or lname in {"web_fetch", "fetch_url"}:
         url = tool_input.get("url", "")
         return f"WebFetch: {url[:80]}"
 
-    if name == "WebSearch":
-        query = tool_input.get("query", "")
+    if name == "WebSearch" or lname in {"web_search", "google_search"}:
+        query = tool_input.get("query") or tool_input.get("search_term") or ""
         return f"WebSearch: {query[:80]}"
 
     if name == "Skill":
@@ -163,7 +250,29 @@ def _summarize_tool(name: str, tool_input: dict, event_type: str) -> str:
         return f"Subagent: {desc}"
 
     if name == "TodoWrite":
+        todos = tool_input.get("todos", [])
+        if todos and isinstance(todos, list):
+            items = []
+            for t in todos[:5]:
+                status = t.get("status", "")
+                content = t.get("content", "")[:50]
+                marker = {"completed": "x", "in_progress": "~", "pending": " "}.get(status, " ")
+                items.append(f"[{marker}] {content}")
+            summary = " | ".join(items)
+            if len(todos) > 5:
+                summary += f" (+{len(todos)-5} more)"
+            return f"TodoWrite: {summary}"
         return "TodoWrite"
+
+    if name in ("TaskCreate", "TaskUpdate"):
+        subject = tool_input.get("subject", "")
+        status = tool_input.get("status", "")
+        if subject:
+            return f"{name}: {subject[:60]}"
+        if status:
+            tid = tool_input.get("taskId", "")
+            return f"{name}: #{tid} -> {status}"
+        return name
 
     if name == "TaskOutput":
         tid = tool_input.get("task_id", "")
@@ -174,21 +283,335 @@ def _summarize_tool(name: str, tool_input: dict, event_type: str) -> str:
 
 def _get_detail(name: str, tool_input: dict) -> Optional[str]:
     """Get expanded detail for a tool call."""
-    if name == "Bash":
-        cmd = tool_input.get("command", "")
+    lname = (name or "").lower()
+
+    if name == "Bash" or lname in {"run_shell_command", "run_command", "execute_command", "bash"}:
+        cmd = (
+            tool_input.get("command")
+            or tool_input.get("cmd")
+            or tool_input.get("bash_command")
+            or ""
+        )
         if len(cmd) > 120:
             return cmd[:500]
         return None
 
-    if name in ("Write", "Edit"):
-        path = tool_input.get("file_path", "")
+    if name in ("Write", "Edit") or lname in {"write_file", "edit_file", "update_file", "replace_in_file"}:
+        path = tool_input.get("file_path") or tool_input.get("path") or ""
         return path
 
     if name == "Task":
         prompt = tool_input.get("prompt", "")
-        return prompt[:300] if prompt else None
+        return prompt[:500] if prompt else None
+
+    if name == "TodoWrite":
+        todos = tool_input.get("todos", [])
+        if not todos:
+            return None
+        lines = []
+        for t in todos:
+            status = t.get("status", "pending")
+            content = t.get("content", "")
+            marker = {"completed": "x", "in_progress": "~", "pending": " "}.get(status, " ")
+            lines.append(f"[{marker}] {content}")
+        return "\n".join(lines)
+
+    if name in ("TaskCreate", "TaskUpdate"):
+        parts = []
+        if tool_input.get("subject"):
+            parts.append(f"Subject: {tool_input['subject']}")
+        if tool_input.get("description"):
+            parts.append(f"Description: {tool_input['description'][:200]}")
+        if tool_input.get("status"):
+            parts.append(f"Status: {tool_input['status']}")
+        return "\n".join(parts) if parts else None
+
+    if name == "Skill":
+        args = tool_input.get("args", "")
+        return args[:500] if args and len(args) > 60 else None
+
+    if name == "WebFetch":
+        parts = []
+        url = tool_input.get("url", "")
+        prompt = tool_input.get("prompt", "")
+        if url:
+            parts.append(f"URL: {url}")
+        if prompt:
+            parts.append(f"Prompt: {prompt[:300]}")
+        return "\n".join(parts) if parts else None
+
+    if name == "WebSearch":
+        query = tool_input.get("query", "")
+        return query if query and len(query) > 80 else None
+
+    if name == "Read":
+        path = tool_input.get("file_path") or tool_input.get("path") or ""
+        pages = tool_input.get("pages", "")
+        offset = tool_input.get("offset")
+        limit = tool_input.get("limit")
+        parts = [path]
+        if pages:
+            parts.append(f"pages={pages}")
+        if offset:
+            parts.append(f"offset={offset}")
+        if limit:
+            parts.append(f"limit={limit}")
+        return " ".join(parts) if len(parts) > 1 or len(path) > 60 else None
 
     return None
+
+
+def _extract_tokens_from_metrics(metrics: dict) -> TokenInfo:
+    if not metrics:
+        return TokenInfo()
+    extra = metrics.get("extra", {}) if isinstance(metrics, dict) else {}
+    cache_creation = 0
+    if isinstance(extra, dict):
+        cache_creation = extra.get("cache_creation_input_tokens", 0)
+        if isinstance(cache_creation, dict):
+            cache_creation = (
+                cache_creation.get("ephemeral_5m_input_tokens", 0)
+                + cache_creation.get("ephemeral_1h_input_tokens", 0)
+            )
+    cache_read = metrics.get("cached_tokens", 0) or (
+        extra.get("cache_read_input_tokens", 0) if isinstance(extra, dict) else 0
+    )
+    prompt_tokens = metrics.get("prompt_tokens", 0)
+    # Harbor ATIF prompt_tokens can include cache-read tokens.
+    # Convert to uncached input tokens so cost accounting doesn't double count cache reads.
+    uncached_input = metrics.get("input_tokens")
+    if uncached_input is None:
+        uncached_input = prompt_tokens
+        if cache_read and prompt_tokens >= cache_read:
+            uncached_input = prompt_tokens - cache_read
+
+    return TokenInfo(
+        input_tokens=uncached_input or 0,
+        output_tokens=metrics.get("completion_tokens", 0) or metrics.get("output_tokens", 0),
+        cache_read=cache_read,
+        cache_creation=cache_creation or 0,
+    )
+
+
+def _stringify_content(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    try:
+        return json.dumps(value, ensure_ascii=False)
+    except Exception:
+        return str(value)
+
+
+def parse_atif_trajectory(path: str, after_line: int = 0) -> ParseResult:
+    """Parse Harbor ATIF trajectory.json into unified event stream."""
+    if not os.path.exists(path):
+        return ParseResult(events=[], total_lines=0)
+
+    try:
+        with open(path, "r", errors="replace") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return ParseResult(events=[], total_lines=0)
+
+    steps = data.get("steps", [])
+    session_id = data.get("session_id")
+    agent_info = data.get("agent", {}) if isinstance(data.get("agent"), dict) else {}
+    model = agent_info.get("model_name")
+    agent_name = agent_info.get("name")
+
+    all_events: List[Event] = []
+
+    def add_event(
+        source: str,
+        event_type: str,
+        summary: str,
+        detail: Optional[str] = None,
+        tool_name: Optional[str] = None,
+        tokens: Optional[dict] = None,
+        timestamp: Optional[str] = None,
+        tool_id: Optional[str] = None,
+    ) -> None:
+        idx = len(all_events)
+        all_events.append(
+            Event(
+                step=idx,
+                timestamp=timestamp,
+                source=source,
+                event_type=event_type,
+                tool_name=tool_name,
+                summary=summary,
+                detail=detail,
+                tokens=tokens,
+                line_num=idx,
+                tool_id=tool_id,
+            )
+        )
+
+    for step in steps:
+        source = step.get("source", "agent")
+        ts = step.get("timestamp")
+        token_info = _extract_tokens_from_metrics(step.get("metrics", {}))
+
+        # Fix output_tokens: ATIF reasoning_content is often empty (thinking
+        # text is dropped), so completion_tokens may under-count.
+        # However, Gemini's metrics.extra.thoughts_tokens reports thinking
+        # tokens accurately, and completion_tokens already includes them.
+        # Strategy: estimate from visible content + thoughts_tokens, take max.
+        if source == "agent":
+            metrics = step.get("metrics", {}) if isinstance(step.get("metrics"), dict) else {}
+            extra = metrics.get("extra", {}) if isinstance(metrics.get("extra"), dict) else {}
+            thoughts_tokens = extra.get("thoughts_tokens", 0) or 0
+
+            content_chars = 0
+            msg_text = step.get("message", "")
+            if isinstance(msg_text, str):
+                content_chars += len(msg_text)
+            reasoning = step.get("reasoning_content", "")
+            if isinstance(reasoning, str):
+                content_chars += len(reasoning)
+            for tc in (step.get("tool_calls") or []):
+                if isinstance(tc, dict):
+                    args = tc.get("arguments", {})
+                    content_chars += len(json.dumps(args, ensure_ascii=False) if isinstance(args, dict) else str(args))
+                    content_chars += len(tc.get("function_name", ""))
+            visible_estimated = _estimate_tokens_from_chars(content_chars)
+            # Best estimate = visible content tokens + thinking tokens.
+            estimated = visible_estimated + thoughts_tokens
+            if estimated > token_info.output_tokens:
+                token_info.output_tokens = estimated
+
+        token_dict = asdict(token_info) if any([
+            token_info.input_tokens,
+            token_info.output_tokens,
+            token_info.cache_read,
+            token_info.cache_creation,
+        ]) else None
+        token_attached = False
+
+        def step_tokens_once() -> Optional[dict]:
+            nonlocal token_attached
+            if token_attached or token_dict is None:
+                return None
+            token_attached = True
+            return token_dict
+
+        message = _stringify_content(step.get("message", "")).strip()
+        reasoning = _stringify_content(step.get("reasoning_content", "")).strip()
+        tool_calls = step.get("tool_calls") if isinstance(step.get("tool_calls"), list) else []
+
+        if source == "agent":
+            if reasoning and reasoning.lower() not in {"null", "none"}:
+                add_event(
+                    source="agent",
+                    event_type="thinking",
+                    summary=f"Thinking: {reasoning[:100]}...",
+                    detail=reasoning[:1000] if len(reasoning) > 100 else None,
+                    tokens=step_tokens_once(),
+                    timestamp=ts,
+                )
+
+            if message and not (tool_calls and message.startswith("Executed ")):
+                add_event(
+                    source="agent",
+                    event_type="text",
+                    summary=message[:150],
+                    detail=message if len(message) > 150 else None,
+                    tokens=step_tokens_once(),
+                    timestamp=ts,
+                )
+
+            for call in tool_calls:
+                tool_name = call.get("function_name") or call.get("name") or ""
+                tool_input = call.get("arguments") or call.get("input") or {}
+                if not isinstance(tool_input, dict):
+                    tool_input = {"raw": _stringify_content(tool_input)}
+                tool_id = call.get("tool_call_id") or call.get("id")
+                event_type = _categorize_tool(tool_name, tool_input)
+                add_event(
+                    source="agent",
+                    event_type=event_type,
+                    tool_name=tool_name,
+                    summary=_summarize_tool(tool_name, tool_input, event_type),
+                    detail=_get_detail(tool_name, tool_input),
+                    tokens=step_tokens_once(),
+                    timestamp=ts,
+                    tool_id=tool_id,
+                )
+
+            obs = step.get("observation", {}) if isinstance(step.get("observation"), dict) else {}
+            results = obs.get("results", []) if isinstance(obs.get("results"), list) else []
+            step_extra = step.get("extra", {}) if isinstance(step.get("extra"), dict) else {}
+            is_error = bool(step_extra.get("tool_result_is_error", False))
+
+            for result in results:
+                call_id = result.get("source_call_id")
+                content = _stringify_content(result.get("content", ""))
+                preview = content[:200] if content else "(empty)"
+                summary = f"Error: {preview}" if is_error else f"Result: {preview}"
+                add_event(
+                    source="tool_result",
+                    event_type="tool_result",
+                    summary=summary,
+                    detail=content[:1000] if len(content) > 200 else None,
+                    tokens=None,
+                    timestamp=ts,
+                    tool_id=call_id,
+                )
+
+        elif source == "user":
+            if message:
+                add_event(
+                    source="user",
+                    event_type="user_message",
+                    summary=message[:150],
+                    detail=message if len(message) > 150 else None,
+                    tokens=step_tokens_once(),
+                    timestamp=ts,
+                )
+        elif source == "system":
+            if message:
+                add_event(
+                    source="system",
+                    event_type="system",
+                    summary=message[:150],
+                    detail=message if len(message) > 150 else None,
+                    tokens=step_tokens_once(),
+                    timestamp=ts,
+                )
+        elif message:
+            add_event(
+                source=source,
+                event_type="other",
+                summary=message[:150],
+                detail=message if len(message) > 150 else None,
+                tokens=step_tokens_once(),
+                timestamp=ts,
+            )
+
+        # Keep accounting accurate even if this step produced no visible event.
+        if token_dict is not None and not token_attached:
+            add_event(
+                source=source if source in {"agent", "user", "system"} else "agent",
+                event_type="text" if source == "agent" else "other",
+                summary="Model turn (no visible content)",
+                detail=None,
+                tokens=step_tokens_once(),
+                timestamp=ts,
+            )
+
+    total_lines = len(all_events)
+    filtered = [e for e in all_events if e.line_num >= after_line]
+    _mask_events(filtered)
+
+    return ParseResult(
+        events=filtered,
+        total_lines=total_lines,
+        session_id=session_id,
+        model=model,
+        agent_name=agent_name,
+    )
 
 
 def parse_claude_code_jsonl(path: str, after_line: int = 0) -> ParseResult:
@@ -198,6 +621,9 @@ def parse_claude_code_jsonl(path: str, after_line: int = 0) -> ParseResult:
     model = None
     step = after_line  # step counter continues from where we left off
     seen_msg_ids = set()  # Track message IDs to avoid double-counting tokens
+    # Accumulate all content blocks per message ID so we can estimate output
+    # tokens from actual content rather than the unreliable usage.output_tokens.
+    msg_content_blocks: Dict[str, list] = {}
 
     if not os.path.exists(path):
         return ParseResult(events=[], total_lines=0)
@@ -243,16 +669,39 @@ def parse_claude_code_jsonl(path: str, after_line: int = 0) -> ParseResult:
                 usage = message.get("usage", {})
                 content_blocks = message.get("content", [])
 
+                # Accumulate content blocks for output token estimation.
+                msg_id = message.get("id", "")
+                if msg_id:
+                    if msg_id not in msg_content_blocks:
+                        msg_content_blocks[msg_id] = []
+                    msg_content_blocks[msg_id].extend(content_blocks)
+
                 # Only count tokens once per unique API call (message ID).
                 # Claude Code splits multi-block responses into separate JSONL
                 # lines, each carrying the full usage for that API call.
-                msg_id = message.get("id", "")
                 if msg_id and msg_id in seen_msg_ids:
                     token_info = None  # Already counted for this API call
                 else:
                     token_info = _extract_tokens(usage)
+                    # Override output_tokens with content-based estimate.
+                    # The usage.output_tokens is unreliable (per-block streaming
+                    # deltas of 1-19 tokens, not the real total).
+                    if token_info and msg_id:
+                        all_blocks = msg_content_blocks.get(msg_id, content_blocks)
+                        estimated = _estimate_output_tokens_from_content(all_blocks)
+                        if estimated > token_info.output_tokens:
+                            token_info.output_tokens = estimated
                     if msg_id:
                         seen_msg_ids.add(msg_id)
+
+                token_attached = False
+
+                def msg_tokens_once():
+                    nonlocal token_attached
+                    if token_info is None or token_attached:
+                        return None
+                    token_attached = True
+                    return asdict(token_info)
 
                 for block in content_blocks:
                     block_type = block.get("type", "")
@@ -267,7 +716,7 @@ def parse_claude_code_jsonl(path: str, after_line: int = 0) -> ParseResult:
                             tool_name=None,
                             summary=f"Thinking: {text[:100]}...",
                             detail=text[:500] if len(text) > 100 else None,
-                            tokens=asdict(token_info) if token_info else None,
+                            tokens=msg_tokens_once(),
                             line_num=line_num,
                             tool_id=None,
                         ))
@@ -283,7 +732,7 @@ def parse_claude_code_jsonl(path: str, after_line: int = 0) -> ParseResult:
                             tool_name=None,
                             summary=text[:150],
                             detail=text if len(text) > 150 else None,
-                            tokens=asdict(token_info) if token_info else None,
+                            tokens=msg_tokens_once(),
                             line_num=line_num,
                             tool_id=None,
                         ))
@@ -305,7 +754,7 @@ def parse_claude_code_jsonl(path: str, after_line: int = 0) -> ParseResult:
                             tool_name=tool_name,
                             summary=summary,
                             detail=detail,
-                            tokens=asdict(token_info) if token_info else None,
+                            tokens=msg_tokens_once(),
                             line_num=line_num,
                             tool_id=tool_id,
                         ))
@@ -386,6 +835,8 @@ def parse_claude_code_jsonl(path: str, after_line: int = 0) -> ParseResult:
     except Exception:
         pass
 
+    _mask_events(events)
+
     return ParseResult(
         events=events,
         total_lines=total_lines,
@@ -449,7 +900,15 @@ def compute_event_type_breakdown(events: list) -> list:
 
 
 def estimate_cost(events: list, model: str = "claude-opus-4-6") -> dict:
-    """Estimate cost based on token usage and model pricing."""
+    """Estimate cost based on token usage and model pricing.
+
+    NOTE on output_tokens:
+    - The raw usage.output_tokens from Claude Code JSONL and ATIF completion_tokens
+      are unreliable (per-block streaming deltas / dropped thinking content).
+    - The parsers now override output_tokens with content-based estimates
+      (~3.5 chars/token) when the reported value is suspiciously low.
+    - This is an approximation; actual token counts depend on the model's tokenizer.
+    """
     # Pricing per million tokens (USD) — updated Feb 2026
     # Cache read = 0.1x input, cache write (5min) = 1.25x input
     pricing = {
@@ -458,19 +917,31 @@ def estimate_cost(events: list, model: str = "claude-opus-4-6") -> dict:
         "claude-sonnet-4-6": {"input": 3.0,   "output": 15.0,  "cache_read": 0.30,  "cache_creation": 3.75},
         "claude-sonnet-4-5": {"input": 3.0,   "output": 15.0,  "cache_read": 0.30,  "cache_creation": 3.75},
         "claude-haiku-4-5":  {"input": 1.0,   "output": 5.0,   "cache_read": 0.10,  "cache_creation": 1.25},
+        "gemini-3.1-pro-preview": {"input": 2.0, "output": 12.0, "cache_read": 0.20, "cache_creation": 2.0},
+        "gemini-3.1-pro":    {"input": 2.0,   "output": 12.0,  "cache_read": 0.20,  "cache_creation": 2.0},
         "gemini-3-pro":      {"input": 2.0,   "output": 12.0,  "cache_read": 0.20,  "cache_creation": 2.0},
         "gemini-2.5-pro":    {"input": 1.25,  "output": 10.0,  "cache_read": 0.125, "cache_creation": 1.25},
     }
 
-    # Normalize model name — match substring
-    prices = pricing.get(model, None)
+    # Normalize model name and resolve best pricing match.
+    model_norm = (model or "").lower()
+    prices = pricing.get(model_norm)
     if not prices:
-        for key in pricing:
-            if key in (model or ""):
+        # Prefer most specific key first.
+        for key in sorted(pricing.keys(), key=len, reverse=True):
+            if key in model_norm:
                 prices = pricing[key]
                 break
     if not prices:
-        prices = pricing["claude-opus-4-6"]  # fallback
+        # Family-based fallback to avoid silently overcharging non-Claude models.
+        if "gemini" in model_norm:
+            prices = pricing["gemini-3.1-pro-preview"]
+        elif "sonnet" in model_norm:
+            prices = pricing["claude-sonnet-4-6"]
+        elif "haiku" in model_norm:
+            prices = pricing["claude-haiku-4-5"]
+        else:
+            prices = pricing["claude-opus-4-6"]
 
     total_input = 0
     total_output = 0
@@ -502,40 +973,79 @@ def estimate_cost(events: list, model: str = "claude-opus-4-6") -> dict:
     }
 
 
-def detect_and_parse(trial_dir: str, after_line: int = 0) -> ParseResult:
-    """Auto-detect format and parse. Looks for claude-code.txt in trial_dir or subdirectories."""
-    # Direct path
-    direct = os.path.join(trial_dir, "claude-code.txt")
+def find_trajectory_path(job_dir: str) -> Optional[str]:
+    """Find Harbor ATIF trajectory.json within a job directory."""
+    direct = os.path.join(job_dir, "trajectory.json")
     if os.path.exists(direct):
-        return parse_claude_code_jsonl(direct, after_line)
+        return direct
 
-    # Search in harbor-task*/agent/ pattern
-    for entry in os.listdir(trial_dir):
-        agent_path = os.path.join(trial_dir, entry, "agent", "claude-code.txt")
-        if os.path.exists(agent_path):
-            return parse_claude_code_jsonl(agent_path, after_line)
-
-    return ParseResult(events=[], total_lines=0)
+    try:
+        for entry in os.listdir(job_dir):
+            if entry.startswith("harbor-task"):
+                path = os.path.join(job_dir, entry, "agent", "trajectory.json")
+                if os.path.exists(path):
+                    return path
+    except OSError:
+        pass
+    return None
 
 
 def find_claude_code_path(job_dir: str) -> Optional[str]:
     """Find the claude-code.txt file within a job directory."""
-    # Direct
     direct = os.path.join(job_dir, "claude-code.txt")
     if os.path.exists(direct):
         return direct
 
-    # harbor-task*/agent/claude-code.txt
     try:
         for entry in os.listdir(job_dir):
             if entry.startswith("harbor-task"):
-                agent_path = os.path.join(job_dir, entry, "agent", "claude-code.txt")
-                if os.path.exists(agent_path):
-                    return agent_path
+                path = os.path.join(job_dir, entry, "agent", "claude-code.txt")
+                if os.path.exists(path):
+                    return path
     except OSError:
         pass
-
     return None
+
+
+def find_gemini_raw_path(job_dir: str) -> Optional[str]:
+    """Find gemini-cli.trajectory.json within a job directory."""
+    direct = os.path.join(job_dir, "gemini-cli.trajectory.json")
+    if os.path.exists(direct):
+        return direct
+
+    try:
+        for entry in os.listdir(job_dir):
+            if entry.startswith("harbor-task"):
+                path = os.path.join(job_dir, entry, "agent", "gemini-cli.trajectory.json")
+                if os.path.exists(path):
+                    return path
+    except OSError:
+        pass
+    return None
+
+
+def find_agent_activity_path(job_dir: str) -> Optional[str]:
+    """Find best file that indicates latest agent activity."""
+    for finder in (find_trajectory_path, find_claude_code_path, find_gemini_raw_path):
+        path = finder(job_dir)
+        if path:
+            return path
+    return None
+
+
+def detect_and_parse(trial_dir: str, after_line: int = 0) -> ParseResult:
+    """Auto-detect and parse with Harbor trajectory as primary source."""
+    traj_path = find_trajectory_path(trial_dir)
+    if traj_path:
+        parsed = parse_atif_trajectory(traj_path, after_line)
+        if parsed.events or parsed.total_lines > 0:
+            return parsed
+
+    cc_path = find_claude_code_path(trial_dir)
+    if cc_path:
+        return parse_claude_code_jsonl(cc_path, after_line)
+
+    return ParseResult(events=[], total_lines=0)
 
 
 def find_artifacts_dir(job_dir: str) -> Optional[str]:

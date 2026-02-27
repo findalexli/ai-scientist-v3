@@ -3,131 +3,305 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Scientist v3 — Job Monitor · @findalexli</title>
+<title>AI Scientist v3 — Job Monitor</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg0: #070b0f;
-  --bg1: #0d1420;
-  --surface: #121b2a;
-  --surface2: #1a2638;
-  --border: #2f4761;
-  --text: #edf4ff;
-  --text-dim: #9eb3cb;
-  --accent: #35c2ff;
-  --accent2: #4ce0b3;
-  --warn: #ffbf69;
+  --bg0: #060a10;
+  --bg1: #0c1219;
+  --surface: #111c2b;
+  --surface2: #182838;
+  --surface3: #1f3248;
+  --border: #1c2e44;
+  --border-hover: #2c4a6a;
+  --text: #e2ecf6;
+  --text-dim: #6e88a6;
+  --text-muted: #3e5670;
+  --accent: #5cb8ff;
+  --accent-glow: rgba(92,184,255,0.15);
+  --accent2: #3dd9a4;
+  --accent2-glow: rgba(61,217,164,0.12);
+  --warm: #ffaa44;
+  --danger: #ff6670;
+  --purple: #a07cff;
+  --pink: #ff6a96;
 }
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
+
 body {
   min-height: 100vh;
-  font-family: 'Manrope', sans-serif;
+  font-family: 'Outfit', sans-serif;
   color: var(--text);
+  background: var(--bg0);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Layered background */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
   background:
-    radial-gradient(1200px 500px at 0% -10%, rgba(53,194,255,0.2), transparent 60%),
-    radial-gradient(900px 460px at 100% 0%, rgba(76,224,179,0.12), transparent 60%),
-    linear-gradient(180deg, var(--bg1), var(--bg0));
+    radial-gradient(ellipse 1400px 600px at 10% -8%, rgba(92,184,255,0.12), transparent 65%),
+    radial-gradient(ellipse 1000px 500px at 90% -5%, rgba(61,217,164,0.08), transparent 60%),
+    radial-gradient(ellipse 600px 400px at 50% 100%, rgba(160,124,255,0.06), transparent 60%);
+  pointer-events: none;
+  z-index: 0;
 }
+
+/* Noise grain overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  opacity: 0.028;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+  background-size: 256px 256px;
+  pointer-events: none;
+  z-index: 9998;
+}
+
 .container {
-  max-width: 1520px;
+  position: relative;
+  z-index: 1;
+  max-width: 1560px;
   margin: 0 auto;
-  padding: 26px 18px 34px;
+  padding: 28px 24px 40px;
 }
+
+/* ─── Header ─── */
 header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  padding: 16px 18px;
+  gap: 16px;
+  padding: 18px 22px;
   border: 1px solid var(--border);
-  border-radius: 14px;
-  background: linear-gradient(180deg, rgba(18,27,42,0.95), rgba(18,27,42,0.75));
-  box-shadow: 0 14px 40px rgba(0,0,0,0.35);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(17,28,43,0.92), rgba(12,18,25,0.82));
+  backdrop-filter: blur(12px);
+  box-shadow:
+    0 1px 0 0 rgba(255,255,255,0.03) inset,
+    0 16px 48px rgba(0,0,0,0.4);
 }
+
 header h1 {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: baseline;
   gap: 8px;
-  font-size: 24px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
-header h1 span { color: var(--accent); }
+
+header h1 .brand {
+  font-family: 'Crimson Pro', serif;
+  font-weight: 700;
+  font-size: 26px;
+  letter-spacing: -0.02em;
+}
+
+header h1 .label {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .title-meta {
   display: inline-flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  margin-left: 6px;
+  gap: 6px;
+  margin-left: 4px;
 }
+
 .title-meta a {
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
   letter-spacing: 0.04em;
   color: var(--text-dim);
   text-decoration: none;
   border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 3px 9px;
-  background: rgba(30,48,70,0.48);
-}
-.title-meta a:hover {
-  border-color: var(--accent);
-  color: #fff;
-}
-.refresh-info {
-  color: var(--text-dim);
-  font-size: 12px;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 5px 12px;
-  background: rgba(30,48,70,0.48);
-}
-.help-strip {
-  margin-top: 10px;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  color: var(--text-dim);
-  font-size: 12px;
-  background: rgba(26,38,56,0.5);
+  border-radius: 6px;
+  padding: 3px 10px;
+  background: rgba(28,46,68,0.4);
+  transition: all 0.15s ease;
 }
 
+.title-meta a:hover {
+  border-color: var(--accent);
+  color: var(--text);
+  background: var(--accent-glow);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.mini-stats {
+  display: flex;
+  gap: 18px;
+}
+
+.mini-stat {
+  text-align: right;
+}
+
+.mini-stat-val {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  line-height: 1.1;
+}
+
+.mini-stat-val.running { color: var(--accent2); }
+.mini-stat-val.cost { color: var(--warm); }
+
+.mini-stat-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+.refresh-badge {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid rgba(28,46,68,0.6);
+  border-radius: 6px;
+  padding: 5px 10px;
+  background: rgba(17,28,43,0.5);
+  white-space: nowrap;
+}
+
+/* ─── Search ─── */
+.search-bar {
+  margin-top: 14px;
+  position: relative;
+}
+
+.search-bar svg {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.search-bar input {
+  width: 100%;
+  padding: 11px 14px 11px 40px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  background: rgba(17,28,43,0.7);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.search-bar input::placeholder {
+  color: var(--text-muted);
+}
+
+.search-bar input:focus {
+  border-color: var(--accent);
+  background: rgba(17,28,43,0.9);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.search-kbd {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.search-kbd kbd {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: rgba(28,46,68,0.5);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  line-height: 1.5;
+}
+
+.search-bar input:focus ~ .search-kbd {
+  opacity: 0;
+}
+
+/* ─── Filters ─── */
 .filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin: 14px 0;
-}
-.filter-btn {
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: rgba(30,48,70,0.54);
-  color: var(--text-dim);
-  padding: 6px 13px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-.filter-btn:hover { border-color: var(--accent); color: #fff; }
-.filter-btn.active {
-  background: rgba(53,194,255,0.22);
-  border-color: var(--accent);
-  color: #fff;
-}
-.filter-btn .count {
-  margin-left: 6px;
-  opacity: 0.84;
-  font-family: 'JetBrains Mono', monospace;
+  gap: 6px;
+  margin: 12px 0;
 }
 
+.filter-btn {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(24,40,56,0.5);
+  color: var(--text-dim);
+  padding: 6px 12px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.filter-btn:hover {
+  border-color: var(--border-hover);
+  color: var(--text);
+  background: rgba(28,46,68,0.6);
+}
+
+.filter-btn.active {
+  background: var(--accent-glow);
+  border-color: rgba(92,184,255,0.4);
+  color: var(--text);
+}
+
+.filter-btn .count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+/* ─── Table ─── */
 .jobs-table {
   width: 100%;
   border-collapse: separate;
@@ -135,67 +309,141 @@ header h1 span { color: var(--accent); }
   border: 1px solid var(--border);
   border-radius: 14px;
   overflow: hidden;
-  background: linear-gradient(180deg, rgba(18,27,42,0.94), rgba(17,26,40,0.74));
-  box-shadow: 0 10px 30px rgba(0,0,0,0.28);
+  background: linear-gradient(180deg, rgba(17,28,43,0.88), rgba(12,18,25,0.75));
+  box-shadow:
+    0 1px 0 0 rgba(255,255,255,0.02) inset,
+    0 12px 40px rgba(0,0,0,0.32);
 }
+
 .jobs-table th {
   text-align: left;
-  font-size: 11px;
-  letter-spacing: 0.08em;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--text-dim);
-  padding: 12px 14px;
+  color: var(--text-muted);
+  padding: 14px 16px;
   border-bottom: 1px solid var(--border);
-  background: rgba(26,38,56,0.65);
+  background: rgba(24,40,56,0.5);
   cursor: pointer;
+  user-select: none;
+  transition: color 0.15s ease;
+  white-space: nowrap;
 }
-.jobs-table th:hover { color: var(--accent); }
-.jobs-table td {
-  padding: 13px 14px;
-  border-bottom: 1px solid rgba(47,71,97,0.62);
-  font-size: 13px;
-}
-.jobs-table tr:last-child td { border-bottom: 0; }
-.jobs-table tr { cursor: pointer; }
-.jobs-table tr:hover td { background: rgba(53,194,255,0.08); }
 
+.jobs-table th:hover { color: var(--accent); }
+
+.jobs-table th .sort-arrow {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 9px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.jobs-table th.sorted .sort-arrow { opacity: 1; }
+
+.jobs-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(28,46,68,0.45);
+  font-size: 13px;
+  transition: background 0.12s ease;
+}
+
+.jobs-table tr:last-child td { border-bottom: 0; }
+
+.jobs-table tbody tr {
+  cursor: pointer;
+  position: relative;
+}
+
+.jobs-table tbody tr:hover td {
+  background: rgba(92,184,255,0.04);
+}
+
+.jobs-table tbody tr:hover td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* Row stagger animation */
+@keyframes rowFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.jobs-table tbody tr {
+  animation: rowFadeIn 0.25s ease both;
+}
+
+/* Status indicators */
 .status {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-weight: 700;
+  gap: 7px;
+  font-weight: 600;
   text-transform: capitalize;
   font-size: 12px;
 }
+
 .status-dot {
+  position: relative;
   width: 8px;
   height: 8px;
-  border-radius: 999px;
-}
-.status-running .status-dot { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); animation: pulse 1.8s infinite; }
-.status-completed .status-dot { background: #8aa0ba; }
-.status-idle .status-dot { background: var(--warn); }
-.status-unknown .status-dot { background: #5a708a; }
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
+.status-running .status-dot {
+  background: var(--accent2);
+  box-shadow: 0 0 6px var(--accent2);
+}
+
+.status-running .status-dot::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1.5px solid var(--accent2);
+  opacity: 0;
+  animation: ringPulse 2s ease-out infinite;
+}
+
+@keyframes ringPulse {
+  0% { opacity: 0.6; transform: scale(0.8); }
+  100% { opacity: 0; transform: scale(1.6); }
+}
+
+.status-completed .status-dot { background: #5e7a96; }
+.status-idle .status-dot { background: var(--warm); box-shadow: 0 0 6px rgba(255,170,68,0.3); }
+.status-unknown .status-dot { background: var(--text-muted); }
+
+/* Badges */
 .model-badge {
-  background: rgba(53,194,255,0.18);
+  display: inline-block;
+  background: var(--accent-glow);
   color: var(--accent);
   padding: 3px 9px;
-  border-radius: 999px;
+  border-radius: 6px;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
+
 .tokens-cell, .cost-cell, .duration-cell {
   font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
+  font-weight: 500;
 }
-.cost-cell { color: var(--warn); }
+
+.cost-cell { color: var(--warm); }
 .duration-cell { color: var(--text-dim); white-space: nowrap; }
+
 .task-name {
   color: var(--text-dim);
   max-width: 440px;
@@ -203,19 +451,67 @@ header h1 span { color: var(--accent); }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
 .submissions-badge {
-  background: rgba(76,224,179,0.18);
+  display: inline-block;
+  background: var(--accent2-glow);
   color: var(--accent2);
-  border-radius: 999px;
+  border-radius: 6px;
   padding: 3px 9px;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
+/* States */
 .loading, .empty-state {
   text-align: center;
   color: var(--text-dim);
-  padding: 26px;
+  padding: 40px 20px;
+}
+
+.empty-state-icon {
+  display: block;
+  margin: 0 auto 12px;
+  width: 48px;
+  height: 48px;
+  opacity: 0.3;
+}
+
+/* Keyboard hints */
+.kbd-hints {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 16px;
+  opacity: 0.5;
+  transition: opacity 0.2s ease;
+}
+
+.kbd-hints:hover { opacity: 0.8; }
+
+.kbd-hint {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.kbd-hint kbd {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  background: rgba(28,46,68,0.5);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+/* Responsive */
+@media (max-width: 1100px) {
+  .mini-stats { display: none; }
 }
 
 @media (max-width: 900px) {
@@ -223,46 +519,85 @@ header h1 span { color: var(--accent); }
     flex-direction: column;
     align-items: flex-start;
   }
-  .refresh-info {
-    align-self: stretch;
-    text-align: center;
-  }
+  .header-right { width: 100%; justify-content: space-between; }
+  .refresh-badge { text-align: center; }
   .jobs-table th:nth-child(8),
-  .jobs-table td:nth-child(8) {
-    display: none;
-  }
+  .jobs-table td:nth-child(8) { display: none; }
 }
 
-::-webkit-scrollbar { width: 8px; }
-::-webkit-scrollbar-thumb { background: #385470; border-radius: 999px; }
+@media (max-width: 640px) {
+  .container { padding: 14px 10px 24px; }
+  header { padding: 14px; }
+  .jobs-table th:nth-child(4), .jobs-table td:nth-child(4),
+  .jobs-table th:nth-child(5), .jobs-table td:nth-child(5) { display: none; }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(56,84,112,0.6); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(56,84,112,0.9); }
+
+/* Focus visible */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Selection */
+::selection {
+  background: rgba(92,184,255,0.25);
+  color: var(--text);
+}
 </style>
 </head>
 <body>
 <div class="container">
   <header>
     <h1>
-      AI Scientist v3 <span>Job Monitor</span>
+      <span class="brand">AI Scientist</span> <span class="label">Job Monitor</span>
       <span class="title-meta">
         <a href="https://github.com/findalexli/ai-scientist-v3" target="_blank" rel="noopener noreferrer">Repo</a>
         <a href="https://github.com/findalexli" target="_blank" rel="noopener noreferrer">@findalexli</a>
       </span>
     </h1>
-    <div class="refresh-info" id="refresh-info">Loading...</div>
+    <div class="header-right">
+      <div class="mini-stats">
+        <div class="mini-stat">
+          <div class="mini-stat-val" id="stat-total">-</div>
+          <div class="mini-stat-label">Jobs</div>
+        </div>
+        <div class="mini-stat">
+          <div class="mini-stat-val running" id="stat-running">-</div>
+          <div class="mini-stat-label">Running</div>
+        </div>
+        <div class="mini-stat">
+          <div class="mini-stat-val cost" id="stat-total-cost">-</div>
+          <div class="mini-stat-label">Total Cost</div>
+        </div>
+      </div>
+      <div class="refresh-badge" id="refresh-info">Loading...</div>
+    </div>
   </header>
-  <div class="help-strip">Job: one full run. Trajectory: the event stream from that run. Submission: a saved paper version with its review and rebuttal.</div>
+
+  <div class="search-bar">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    <input type="text" id="search-input" placeholder="Search jobs by name, model, or task..." autocomplete="off" spellcheck="false">
+    <span class="search-kbd"><kbd>/</kbd></span>
+  </div>
 
   <div class="filters" id="filters"></div>
 
   <table class="jobs-table" id="jobs-table">
     <thead>
       <tr>
-        <th data-sort="status">Status</th>
-        <th data-sort="id">Job</th>
-        <th data-sort="model">Model</th>
-        <th data-sort="duration">Duration</th>
-        <th data-sort="tokens">Tokens</th>
-        <th data-sort="cost">Cost</th>
-        <th data-sort="submissions">Submissions</th>
+        <th data-sort="status">Status <span class="sort-arrow"></span></th>
+        <th data-sort="id">Job <span class="sort-arrow"></span></th>
+        <th data-sort="model">Model <span class="sort-arrow"></span></th>
+        <th data-sort="duration">Duration <span class="sort-arrow"></span></th>
+        <th data-sort="tokens">Tokens <span class="sort-arrow"></span></th>
+        <th data-sort="cost">Cost <span class="sort-arrow"></span></th>
+        <th data-sort="submissions">Subs <span class="sort-arrow"></span></th>
         <th>Task</th>
       </tr>
     </thead>
@@ -270,6 +605,12 @@ header h1 span { color: var(--accent); }
       <tr><td colspan="8" class="loading">Loading jobs...</td></tr>
     </tbody>
   </table>
+
+  <div class="kbd-hints">
+    <span class="kbd-hint"><kbd>/</kbd> Search</span>
+    <span class="kbd-hint"><kbd>j</kbd><kbd>k</kbd> Navigate</span>
+    <span class="kbd-hint"><kbd>Enter</kbd> Open</span>
+  </div>
 </div>
 
 <script>
@@ -278,6 +619,8 @@ let currentFilter = 'all';
 let sortKey = 'id';
 let sortAsc = false;
 let hideDateOnlyJobs = true;
+let searchQuery = '';
+let focusedRowIdx = -1;
 
 function formatTokens(n) {
   if (!n) return '-';
@@ -307,8 +650,26 @@ function isDateOnlyJobId(jobId) {
 }
 
 function getVisibleJobs() {
-  if (!hideDateOnlyJobs) return [...allJobs];
-  return allJobs.filter(j => !isDateOnlyJobId(j.id));
+  let jobs = hideDateOnlyJobs ? allJobs.filter(j => !isDateOnlyJobId(j.id)) : [...allJobs];
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    jobs = jobs.filter(j =>
+      (j.id || '').toLowerCase().includes(q) ||
+      (j.model || '').toLowerCase().includes(q) ||
+      (j.task_name || '').toLowerCase().includes(q)
+    );
+  }
+  return jobs;
+}
+
+function updateMiniStats() {
+  const visible = getVisibleJobs();
+  const running = visible.filter(j => j.status === 'running').length;
+  const totalCost = visible.reduce((sum, j) => sum + (j.tokens?.estimated_cost_usd || 0), 0);
+
+  document.getElementById('stat-total').textContent = visible.length;
+  document.getElementById('stat-running').textContent = running || '0';
+  document.getElementById('stat-total-cost').textContent = totalCost > 0 ? '$' + totalCost.toFixed(2) : '-';
 }
 
 function renderFilters() {
@@ -334,8 +695,22 @@ function renderFilters() {
     hideDateOnlyJobs = !hideDateOnlyJobs;
     renderFilters();
     renderTable();
+    updateMiniStats();
   };
   filtersEl.appendChild(toggle);
+}
+
+function updateSortIndicators() {
+  document.querySelectorAll('.jobs-table th[data-sort]').forEach(th => {
+    const arrow = th.querySelector('.sort-arrow');
+    if (th.dataset.sort === sortKey) {
+      th.classList.add('sorted');
+      arrow.textContent = sortAsc ? '\u25B2' : '\u25BC';
+    } else {
+      th.classList.remove('sorted');
+      arrow.textContent = '';
+    }
+  });
 }
 
 function renderTable() {
@@ -372,19 +747,23 @@ function renderTable() {
 
   const tbody = document.getElementById('jobs-body');
   if (!jobs.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No jobs found.</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">
+      <svg class="empty-state-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      ${searchQuery ? 'No jobs match your search.' : 'No jobs found.'}
+    </td></tr>`;
     return;
   }
 
-  tbody.innerHTML = jobs.map(j => `
-    <tr onclick="window.location='/job/${encodeURIComponent(j.id)}'">
+  focusedRowIdx = -1;
+  tbody.innerHTML = jobs.map((j, i) => `
+    <tr data-idx="${i}" data-job-id="${escHtml(j.id)}" onclick="window.location='/job/${encodeURIComponent(j.id)}'" style="animation-delay:${Math.min(i * 0.025, 0.5)}s">
       <td>
         <span class="status status-${escHtml(j.status)}">
           <span class="status-dot"></span>
           ${escHtml(j.status)}
         </span>
       </td>
-      <td>${escHtml(j.id)}</td>
+      <td style="font-weight:600">${escHtml(j.id)}</td>
       <td><span class="model-badge">${escHtml(j.model || 'unknown')}</span></td>
       <td class="duration-cell">${formatDuration(j.duration_seconds)}</td>
       <td class="tokens-cell">${formatTokens(j.tokens?.total_tokens)}</td>
@@ -393,6 +772,9 @@ function renderTable() {
       <td class="task-name" title="${escHtml(j.task_name || '')}">${escHtml(j.task_name || '-')}</td>
     </tr>
   `).join('');
+
+  updateSortIndicators();
+  updateMiniStats();
 }
 
 async function fetchJobs() {
@@ -402,13 +784,14 @@ async function fetchJobs() {
     renderFilters();
     renderTable();
     document.getElementById('refresh-info').textContent =
-      `${allJobs.length} jobs • updated ${new Date().toLocaleTimeString()}`;
+      `${allJobs.length} jobs \u00B7 ${new Date().toLocaleTimeString()}`;
   } catch (e) {
     document.getElementById('jobs-body').innerHTML =
       '<tr><td colspan="8" class="empty-state">Error loading jobs.</td></tr>';
   }
 }
 
+/* Sort handlers */
 document.querySelectorAll('.jobs-table th[data-sort]').forEach(th => {
   th.addEventListener('click', () => {
     const key = th.dataset.sort;
@@ -417,6 +800,64 @@ document.querySelectorAll('.jobs-table th[data-sort]').forEach(th => {
     renderTable();
   });
 });
+
+/* Search */
+const searchInput = document.getElementById('search-input');
+let searchTimeout;
+searchInput.addEventListener('input', () => {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => {
+    searchQuery = searchInput.value.trim();
+    renderFilters();
+    renderTable();
+  }, 200);
+});
+
+/* Keyboard shortcuts */
+document.addEventListener('keydown', (e) => {
+  /* / to focus search */
+  if (e.key === '/' && document.activeElement !== searchInput) {
+    e.preventDefault();
+    searchInput.focus();
+    return;
+  }
+
+  /* Escape to blur search */
+  if (e.key === 'Escape' && document.activeElement === searchInput) {
+    searchInput.blur();
+    return;
+  }
+
+  /* j/k navigation (only when not in search) */
+  if (document.activeElement === searchInput) return;
+
+  const rows = document.querySelectorAll('#jobs-body tr[data-idx]');
+  if (!rows.length) return;
+
+  if (e.key === 'j' || e.key === 'ArrowDown') {
+    e.preventDefault();
+    focusedRowIdx = Math.min(focusedRowIdx + 1, rows.length - 1);
+    highlightRow(rows);
+  } else if (e.key === 'k' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    focusedRowIdx = Math.max(focusedRowIdx - 1, 0);
+    highlightRow(rows);
+  } else if (e.key === 'Enter' && focusedRowIdx >= 0 && focusedRowIdx < rows.length) {
+    e.preventDefault();
+    rows[focusedRowIdx].click();
+  }
+});
+
+function highlightRow(rows) {
+  rows.forEach((r, i) => {
+    if (i === focusedRowIdx) {
+      r.style.background = 'rgba(92,184,255,0.08)';
+      r.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    } else {
+      r.style.background = '';
+    }
+  });
+}
 
 fetchJobs();
 setInterval(fetchJobs, 10000);

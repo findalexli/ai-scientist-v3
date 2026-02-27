@@ -118,6 +118,7 @@ def main():
     result = {
         "repo_url": repo_url,
         "web_url": web_url,
+        "project_id": project_id,
         "branch": branch_name,
         "sibling_branches": sibling_branches,
     }

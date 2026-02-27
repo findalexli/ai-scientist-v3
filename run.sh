@@ -307,6 +307,16 @@ else
 fi
 
 cleanup() {
+    # Push artifacts to GitLab in background (non-blocking).
+    local _JOB_DIR="$SCRIPT_DIR/jobs/$JOB_NAME"
+    if [[ -n "${GITLAB_KEY:-}" ]] && [[ -d "$_JOB_DIR" ]]; then
+        echo ""
+        echo "=== Pushing artifacts to GitLab ==="
+        nohup python3 "$SCRIPT_DIR/scripts/push_to_gitlab.py" \
+            --job-dir "$_JOB_DIR" \
+            >> "$_JOB_DIR/gitlab_push.log" 2>&1 &
+        echo "  GitLab push started (PID: $!, log: $_JOB_DIR/gitlab_push.log)"
+    fi
     rm -rf "$TASK_DIR"
 }
 trap cleanup EXIT
