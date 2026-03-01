@@ -811,7 +811,7 @@ async def api_job_meta(job_id: str):
                 "model": model,
                 "submissions": gl_meta.get("submission_count", 0),
                 "gitlab_url": gitlab_url,
-            }, headers={"Cache-Control": "public, max-age=3600, s-maxage=3600"})
+            }, headers=_CDN_CACHE_1H)
 
     # Fallback to local disk.
     meta = discover_job_meta(job_id)
@@ -831,6 +831,17 @@ async def api_job_meta(job_id: str):
 # Completed jobs never change, so cache indefinitely in-process.
 _EVENTS_CACHE: Dict[str, dict] = {}
 
+# Cache headers for immutable completed-job data.
+# CDN-Cache-Control tells Cloudflare to cache JSON (not in its default cacheable list).
+_CDN_CACHE_24H = {
+    "Cache-Control": "public, max-age=86400",
+    "CDN-Cache-Control": "public, max-age=86400",
+}
+_CDN_CACHE_1H = {
+    "Cache-Control": "public, max-age=3600",
+    "CDN-Cache-Control": "public, max-age=3600",
+}
+
 
 @app.get("/api/jobs/{job_id}/events")
 async def api_events(job_id: str, after: int = 0):
@@ -839,7 +850,7 @@ async def api_events(job_id: str, after: int = 0):
     cached = _EVENTS_CACHE.get(cache_key)
     if cached is not None:
         # Completed jobs never change — long cache for CF edge + browser.
-        return JSONResponse(cached, headers={"Cache-Control": "public, max-age=86400, s-maxage=86400"})
+        return JSONResponse(cached, headers=_CDN_CACHE_24H)
 
     # In gitlab mode, parse the sanitized trajectory from GitLab.
     gl = _gitlab_lookup(job_id)
@@ -864,7 +875,7 @@ async def api_events(job_id: str, after: int = 0):
                 "model": result.model,
             }
             _EVENTS_CACHE[cache_key] = payload
-            return JSONResponse(payload, headers={"Cache-Control": "public, max-age=86400, s-maxage=86400"})
+            return JSONResponse(payload, headers=_CDN_CACHE_24H)
 
     if SOURCE_MODE == "gitlab":
         return JSONResponse({"error": "Job not found on GitLab"}, status_code=404)
@@ -952,7 +963,7 @@ async def api_tokens(job_id: str):
                 "cumulative_tokens": summary.get("cumulative_tokens") or [],
                 "tool_breakdown": summary.get("tool_breakdown") or [],
                 "event_type_breakdown": summary.get("event_type_breakdown") or [],
-            }, headers={"Cache-Control": "public, max-age=86400, s-maxage=86400"})
+            }, headers=_CDN_CACHE_24H)
 
     # Fallback to local disk (local mode only).
     if SOURCE_MODE == "gitlab":
@@ -989,7 +1000,7 @@ async def api_job_idea(job_id: str):
                 "source": "gitlab",
                 "content": mask_secrets_in_text(text),
                 "format": "json",
-            }, headers={"Cache-Control": "public, max-age=86400, s-maxage=86400"})
+            }, headers=_CDN_CACHE_24H)
         # No idea.json on GitLab — return not-found.
         return JSONResponse({"found": False, "stem": _extract_idea_stem(job_id), "source": None, "content": None, "format": None})
 
@@ -1043,7 +1054,7 @@ async def api_submissions(job_id: str):
                 })
             submissions.sort(key=lambda r: (r.get("version") or -1, r.get("timestamp") or ""), reverse=True)
             return JSONResponse({"submissions": submissions, "total": len(submissions)},
-                                headers={"Cache-Control": "public, max-age=86400, s-maxage=86400"})
+                                headers=_CDN_CACHE_24H)
 
     # Fallback to local disk (local mode only).
     if SOURCE_MODE == "gitlab":
