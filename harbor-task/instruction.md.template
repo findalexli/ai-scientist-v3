@@ -73,9 +73,9 @@ This ensures partial work is preserved if the run times out.
 
 ## User Feedback
 
-The user overseeing this job can leave real-time guidance in `/logs/agent/feedback.txt`.
-Check this file at the start of your run and again at natural pause points (after
-literature review, after experiments, after getting a review). If the file exists and
-has content, incorporate the guidance into your work before continuing.
+User feedback is delivered automatically via a Claude Code hook. When the user submits
+guidance it will appear as `additionalContext` injected before your next tool call —
+you do not need to poll any file. When you see such a message, acknowledge it and
+incorporate the guidance before proceeding.
 
 Follow the research process defined in your project instructions.

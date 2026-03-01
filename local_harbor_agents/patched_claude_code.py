@@ -1,9 +1,50 @@
+import base64
+import json
 import re
 import shlex
 from pathlib import Path
 
 from harbor.agents.installed.base import ExecInput
 from harbor.agents.installed.claude_code import ClaudeCode
+
+# ---------------------------------------------------------------------------
+# Pre-computed assets for the user-feedback PreToolUse hook
+# ---------------------------------------------------------------------------
+# The hook is installed into $CLAUDE_CONFIG_DIR/settings.json before Claude
+# starts.  It checks /logs/agent/feedback.txt for new bytes (tracked via a
+# byte-offset sentinel) and, if any exist, returns them as `additionalContext`
+# so Claude sees the feedback injected into its context on the very next tool
+# call — no polling or manual file reads required.
+#
+# We base64-encode both files so they can be embedded in the wrapper shell
+# script without any escaping issues.
+
+_FEEDBACK_HOOK_SCRIPT = base64.b64encode(r"""#!/bin/bash
+# PreToolUse hook: forward new user feedback as additionalContext.
+cat > /dev/null          # consume stdin (required by Claude Code)
+FEEDBACK="/logs/agent/feedback.txt"
+SEEN="/tmp/_feedback_seen_bytes"
+[ -f "$FEEDBACK" ] || exit 0
+TOTAL=$(wc -c < "$FEEDBACK")
+PREV=$(cat "$SEEN" 2>/dev/null || echo 0)
+[ "$TOTAL" -le "$PREV" ] && exit 0
+tail -c +"$((PREV + 1))" "$FEEDBACK" > /tmp/_new_feedback.txt
+echo "$TOTAL" > "$SEEN"
+python3 - << 'PYEOF'
+import json
+with open('/tmp/_new_feedback.txt') as fh:
+    content = fh.read().strip()
+if content:
+    ctx = 'User feedback received:\n' + content + '\nPlease acknowledge and incorporate this guidance before proceeding.'
+    print(json.dumps({'hookSpecificOutput': {'hookEventName': 'PreToolUse', 'additionalContext': ctx}}))
+PYEOF
+""".encode()).decode()
+
+_FEEDBACK_HOOK_SETTINGS = base64.b64encode(json.dumps({
+    "hooks": {
+        "PreToolUse": [{"hooks": [{"type": "command", "command": "/tmp/_check_feedback.sh", "timeout": 5}]}],
+    },
+}, indent=2).encode()).decode()
 
 _UUID_JSONL_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jsonl$"
@@ -100,6 +141,16 @@ sync_artifacts() {{
 }}
 
 trap 'sync_artifacts' EXIT TERM INT
+
+# --- Install user-feedback PreToolUse hook ---
+printf '%s' '{_FEEDBACK_HOOK_SCRIPT}' | base64 -d > /tmp/_check_feedback.sh
+chmod +x /tmp/_check_feedback.sh
+HOOK_SESSIONS_DIR="${{CLAUDE_CONFIG_DIR:-/logs/agent/sessions}}"
+mkdir -p "$HOOK_SESSIONS_DIR"
+# Write settings.json only if it does not already exist.
+if [ ! -f "$HOOK_SESSIONS_DIR/settings.json" ]; then
+    printf '%s' '{_FEEDBACK_HOOK_SETTINGS}' | base64 -d > "$HOOK_SESSIONS_DIR/settings.json"
+fi
 
 # --- Git remote + branch setup (if GITLAB_REPO_URL is set) ---
 if [ -n "${{GITLAB_REPO_URL:-}}" ]; then
