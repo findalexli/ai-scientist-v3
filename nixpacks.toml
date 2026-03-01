@@ -1,0 +1,19 @@
+# Railway deployment config for AI Scientist Viewer
+# Python backend (FastAPI) + React frontend (built during deploy)
+
+[phases.setup]
+nixPkgs = ["nodejs_22", "python312"]
+
+[phases.frontend]
+dependsOn = ["setup"]
+cmds = [
+    "cd viewer/frontend && npm install --legacy-peer-deps",
+    "cd viewer/frontend && npx react-router build",
+]
+
+[phases.install]
+dependsOn = ["setup"]
+cmds = ["pip install -r requirements.txt ijson"]
+
+[start]
+cmd = "cd viewer && python3 app.py --port ${PORT:-8501} --source gitlab"

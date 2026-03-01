@@ -31,6 +31,11 @@ from parse_trajectory import (
     mask_secrets,
     mask_secrets_in_text,
 )
+from trajectory_index import (
+    generate_index,
+    get_or_generate_index,
+    read_single_step,
+)
 from gitlab_client import GitLabClient
 
 app = FastAPI(title="AI Scientist v3 — Job Viewer")
@@ -53,6 +58,24 @@ JOBS_LIST_CACHE: Dict[str, Any] = {
     "payload": None,
 }
 JOBS_LIST_CACHE_TTL_SEC = 15.0
+
+
+def _safe_job_id(job_id: str) -> bool:
+    """Reject job IDs containing path traversal sequences."""
+    return bool(job_id) and ".." not in job_id and "/" not in job_id and "\\" not in job_id
+
+
+@app.middleware("http")
+async def validate_job_id(request: Request, call_next):
+    """Block path traversal in job_id parameters."""
+    path = request.url.path
+    if path.startswith("/api/jobs/"):
+        parts = path.split("/")
+        if len(parts) >= 4:
+            job_id = parts[3]
+            if not _safe_job_id(job_id):
+                return JSONResponse({"error": "Invalid job ID"}, status_code=400)
+    return await call_next(request)
 
 # GitLab client — initialized if GITLAB_KEY is set and SOURCE_MODE is "gitlab".
 GITLAB_CLIENT: Optional[GitLabClient] = None
@@ -658,8 +681,30 @@ def _discover_jobs_local() -> list:
             task_name = cached.get("task_name", task_name)
             parsed_model = cached.get("parsed_model")
         else:
-            should_parse_detail = status == "running"
-            if should_parse_detail:
+            # Try trajectory index first (fast, ~300KB per file) before full parse
+            traj_path = find_trajectory_path(job_dir)
+            if traj_path:
+                try:
+                    idx_data = get_or_generate_index(traj_path)
+                    if idx_data:
+                        line_count = idx_data.get("total_steps", 0)
+                        fm = idx_data.get("final_metrics") or {}
+                        agent_info = idx_data.get("agent") or {}
+                        parsed_model = agent_info.get("model_name")
+                        # Build token summary from index final_metrics
+                        total_prompt = fm.get("total_prompt_tokens") or 0
+                        total_comp = fm.get("total_completion_tokens") or 0
+                        total_cached = fm.get("total_cached_tokens") or 0
+                        extra = fm.get("extra") or {}
+                        cache_create = extra.get("total_cache_creation_input_tokens") or 0
+                        if total_prompt or total_comp:
+                            token_summary = estimate_cost(
+                                total_prompt, total_comp, total_cached, cache_create,
+                                model=(parsed_model or "unknown"),
+                            )
+                except Exception:
+                    pass  # Fall back to no tokens
+            elif status == "running":
                 result = load_job_events(job_dir)
                 if result.events:
                     metrics = get_job_metrics(job_dir, config, allow_backfill=False, parsed=result)
@@ -689,7 +734,7 @@ def _discover_jobs_local() -> list:
         if model_name == "unknown" and parsed_model:
             model_name = str(parsed_model).split("/")[-1].replace("claude-", "")
 
-        sub_count = get_submission_count(job_dir) if status == "running" else 0
+        sub_count = get_submission_count(job_dir)
 
         jobs.append({
             "id": name,
@@ -742,26 +787,22 @@ def discover_job_meta(job_id: str) -> Optional[dict]:
 
 
 # ---------------------------------------------------------------------------
-# API endpoints
+# SPA frontend (React build) — served as static files
 # ---------------------------------------------------------------------------
 
-@app.get("/", response_class=HTMLResponse)
-async def dashboard():
-    """Serve the dashboard HTML."""
-    template_path = os.path.join(TEMPLATES_DIR, "index.html")
-    with open(template_path) as f:
-        return HTMLResponse(f.read())
+FRONTEND_BUILD_DIR = os.path.join(os.path.dirname(__file__), "frontend", "build", "client")
+
+# Mount static assets if the build exists
+from fastapi.staticfiles import StaticFiles as _StaticFiles
+if os.path.isdir(os.path.join(FRONTEND_BUILD_DIR, "assets")):
+    app.mount("/assets", _StaticFiles(directory=os.path.join(FRONTEND_BUILD_DIR, "assets")), name="frontend_assets")
+if os.path.isdir(os.path.join(FRONTEND_BUILD_DIR, "fonts")):
+    app.mount("/fonts", _StaticFiles(directory=os.path.join(FRONTEND_BUILD_DIR, "fonts")), name="frontend_fonts")
 
 
-@app.get("/job/{job_id}", response_class=HTMLResponse)
-async def job_detail(job_id: str):
-    """Serve the job detail HTML."""
-    template_path = os.path.join(TEMPLATES_DIR, "job.html")
-    with open(template_path) as f:
-        html = f.read()
-    # Inject job_id into the template
-    html = html.replace("{{JOB_ID}}", job_id)
-    return HTMLResponse(html)
+# ---------------------------------------------------------------------------
+# API endpoints
+# ---------------------------------------------------------------------------
 
 
 @app.get("/api/jobs")
@@ -830,6 +871,10 @@ async def api_job_meta(job_id: str):
 # Server-side cache for parsed events (keyed by job_id:after_line).
 # Completed jobs never change, so cache indefinitely in-process.
 _EVENTS_CACHE: Dict[str, dict] = {}
+
+# Server-side cache for trajectory indices (keyed by job_id).
+# Stores {"data": <index_dict>, "traj_path": str, "mtime": float}.
+_INDEX_CACHE: Dict[str, dict] = {}
 
 # Cache headers for immutable completed-job data.
 # CDN-Cache-Control tells Cloudflare to cache JSON (not in its default cacheable list).
@@ -1199,6 +1244,201 @@ async def api_trajectory(job_id: str, regenerate: bool = False):
         return JSONResponse(mask_secrets(data))
     except (json.JSONDecodeError, OSError) as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+def _resolve_trajectory_path(job_id: str) -> Optional[str]:
+    """Resolve trajectory file path for a local job, generating if needed."""
+    job_dir = os.path.join(JOBS_DIR, job_id)
+    if not os.path.isdir(job_dir):
+        return None
+    traj_path = find_trajectory_path(job_dir)
+    if not traj_path:
+        generate_trajectory(job_dir)
+        traj_path = find_trajectory_path(job_dir)
+    return traj_path
+
+
+def _get_cached_index(job_id: str, traj_path: str) -> Optional[dict]:
+    """Return index from in-memory cache if still valid."""
+    cached = _INDEX_CACHE.get(job_id)
+    if not cached:
+        return None
+    if cached.get("traj_path") != traj_path:
+        return None
+    try:
+        mtime = os.path.getmtime(traj_path)
+        if cached.get("mtime") == mtime:
+            return cached["data"]
+    except OSError:
+        pass
+    return None
+
+
+def _cache_index(job_id: str, traj_path: str, index: dict) -> None:
+    """Store index in the in-memory cache."""
+    try:
+        mtime = os.path.getmtime(traj_path)
+    except OSError:
+        mtime = 0.0
+    _INDEX_CACHE[job_id] = {
+        "data": index,
+        "traj_path": traj_path,
+        "mtime": mtime,
+    }
+
+
+@app.get("/api/jobs/{job_id}/trajectory/index")
+async def api_trajectory_index(job_id: str):
+    """Return lightweight trajectory index for virtual scrolling.
+
+    The index contains step summaries with byte offsets for O(1) random access
+    to any step.  It is cached on disk as trajectory_index.json and in-memory.
+    """
+    # --- GitLab mode: build index from the remote trajectory ---
+    gl = _gitlab_lookup(job_id)
+    if gl:
+        # Check in-memory cache first (keyed by job_id).
+        cached = _INDEX_CACHE.get(job_id)
+        if cached and cached.get("data"):
+            return JSONResponse(cached["data"], headers=_CDN_CACHE_24H)
+
+        project_id, branch = gl
+        traj = GITLAB_CLIENT.get_file_json(project_id, branch, "agent_trace/trajectory.json")
+        if not traj:
+            return JSONResponse({"error": "Trajectory not found on GitLab"}, status_code=404)
+
+        # Write to a temp file so generate_index() can compute byte offsets.
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp:
+            json.dump(traj, tmp)
+            tmp_path = tmp.name
+        try:
+            index = generate_index(tmp_path)
+        finally:
+            os.unlink(tmp_path)
+
+        # Cache in-memory (GitLab data doesn't change for completed jobs).
+        _INDEX_CACHE[job_id] = {"data": index, "traj_path": "gitlab", "mtime": 0}
+        return JSONResponse(index, headers=_CDN_CACHE_24H)
+
+    if SOURCE_MODE == "gitlab":
+        return JSONResponse({"error": "Job not found on GitLab"}, status_code=404)
+
+    # --- Local mode ---
+    traj_path = _resolve_trajectory_path(job_id)
+    if not traj_path or not os.path.exists(traj_path):
+        return JSONResponse({"error": "No trajectory available"}, status_code=404)
+
+    # Check in-memory cache.
+    index = _get_cached_index(job_id, traj_path)
+    if index is not None:
+        return JSONResponse(index)
+
+    # Check on-disk cache, then generate.
+    index = get_or_generate_index(traj_path)
+
+    # Sanitize summaries.
+    for step in index.get("steps", []):
+        if step.get("summary"):
+            step["summary"] = mask_secrets_in_text(step["summary"])
+
+    # Determine cache headers: completed jobs get long TTL.
+    job_dir = os.path.join(JOBS_DIR, job_id)
+    status = get_job_status(job_dir)
+    headers = _CDN_CACHE_24H if status != "running" else {}
+
+    _cache_index(job_id, traj_path, index)
+    return JSONResponse(index, headers=headers)
+
+
+@app.get("/api/jobs/{job_id}/trajectory/step/{step_id}")
+async def api_trajectory_step(job_id: str, step_id: int):
+    """Return full content for a single ATIF step via byte-offset seeking.
+
+    Uses the trajectory index to locate the step in the file, then reads only
+    the relevant bytes.  Falls back to loading from JSON if byte offsets are
+    unavailable.
+    """
+    # --- GitLab mode: fetch full trajectory and extract step ---
+    gl = _gitlab_lookup(job_id)
+    if gl:
+        project_id, branch = gl
+        traj = GITLAB_CLIENT.get_file_json(project_id, branch, "agent_trace/trajectory.json")
+        if not traj:
+            return JSONResponse({"error": "Trajectory not found on GitLab"}, status_code=404)
+        steps = traj.get("steps", [])
+        if step_id < 0 or step_id >= len(steps):
+            return JSONResponse({"error": f"Step {step_id} out of range (0..{len(steps)-1})"}, status_code=404)
+        return JSONResponse(mask_secrets(steps[step_id]), headers=_CDN_CACHE_24H)
+
+    if SOURCE_MODE == "gitlab":
+        return JSONResponse({"error": "Job not found on GitLab"}, status_code=404)
+
+    # --- Local mode ---
+    traj_path = _resolve_trajectory_path(job_id)
+    if not traj_path or not os.path.exists(traj_path):
+        return JSONResponse({"error": "No trajectory available"}, status_code=404)
+
+    # Get the index (from cache or generate).
+    index = _get_cached_index(job_id, traj_path)
+    if index is None:
+        index = get_or_generate_index(traj_path)
+        _cache_index(job_id, traj_path, index)
+
+    steps_index = index.get("steps", [])
+    if step_id < 0 or step_id >= len(steps_index):
+        total = index.get("total_steps", 0)
+        return JSONResponse(
+            {"error": f"Step {step_id} out of range (0..{total - 1})"},
+            status_code=404,
+        )
+
+    step_info = steps_index[step_id]
+    byte_offset = step_info.get("byte_offset", 0)
+    byte_length = step_info.get("byte_length", 0)
+
+    # Try O(1) byte-offset read.
+    step_data = read_single_step(traj_path, byte_offset, byte_length)
+    if step_data is not None:
+        return JSONResponse(mask_secrets(step_data))
+
+    # Fallback: load the full file and index into steps array.
+    try:
+        with open(traj_path, "r") as f:
+            data = json.load(f)
+        steps = data.get("steps", [])
+        if step_id < len(steps):
+            return JSONResponse(mask_secrets(steps[step_id]))
+    except (json.JSONDecodeError, OSError):
+        pass
+
+    return JSONResponse({"error": "Failed to read step data"}, status_code=500)
+
+
+# ---------------------------------------------------------------------------
+# SPA catch-all: serve index.html for any non-API, non-asset path
+# ---------------------------------------------------------------------------
+
+@app.get("/favicon.ico")
+async def favicon():
+    fav = os.path.join(FRONTEND_BUILD_DIR, "favicon.ico")
+    if os.path.exists(fav):
+        return FileResponse(fav)
+    return JSONResponse({"error": "not found"}, status_code=404)
+
+
+@app.get("/{path:path}")
+async def serve_spa(path: str):
+    """Serve the React SPA for all non-API routes."""
+    index_html = os.path.join(FRONTEND_BUILD_DIR, "index.html")
+    if os.path.exists(index_html):
+        return FileResponse(index_html, media_type="text/html")
+    # Fallback: if no React build, try old templates
+    template_path = os.path.join(TEMPLATES_DIR, "index.html")
+    if os.path.exists(template_path):
+        with open(template_path) as f:
+            return HTMLResponse(f.read())
+    return HTMLResponse("<h1>Viewer not built. Run: cd viewer/frontend && npx react-router build</h1>")
 
 
 # ---------------------------------------------------------------------------
