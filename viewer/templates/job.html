@@ -479,73 +479,47 @@ body::after {
 }
 .step-group-header:hover { background: rgba(24,40,60,0.5); }
 .step-group-header .event-step { min-width: 36px; }
+.step-group-open .step-group-header { border-bottom: 1px solid rgba(28,46,68,0.4); }
 
-.step-group-body { padding: 0 0 4px 0; }
+.step-group-body { padding: 8px 12px 10px 12px; }
 
-.step-sub-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 4px 11px 4px 48px;
-  font-size: 12px;
-  color: var(--text);
-  cursor: pointer;
-  transition: background 0.1s;
-  border-left: 2px solid transparent;
-  margin: 0 4px;
-  border-radius: 4px;
-}
-.step-sub-row:hover { background: rgba(24,40,60,0.5); }
-
-.step-sub-row.sub-thinking {
+/* Sections inside expanded step (Harbor-style) */
+.step-section { margin-bottom: 10px; }
+.step-section:last-child { margin-bottom: 0; }
+.step-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   color: var(--text-muted);
-  font-style: italic;
-  font-size: 11.5px;
+  margin-bottom: 4px;
 }
-.step-sub-row.sub-text {
-  color: var(--text);
+.step-section-content { }
+.step-tool-name {
   font-size: 12px;
-}
-.step-sub-row.sub-tool-call {
-  border-left-color: rgba(92,184,255,0.3);
-}
-.step-sub-row.sub-tool-result {
-  padding-left: 64px;
-  color: var(--text-muted);
-  font-size: 11px;
   font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  margin-bottom: 4px;
 }
-.step-sub-row.sub-tool-result::before {
-  content: '\21B3';
-  margin-right: 6px;
-  color: #3a5a78;
-}
-.sub-row-summary {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.sub-row-detail {
-  display: none;
-  margin-top: 6px;
-  padding: 8px;
+.step-pre {
+  margin: 0;
+  padding: 8px 10px;
   border-radius: 6px;
-  border: 1px solid rgba(28,46,68,0.5);
   background: rgba(6,10,16,0.55);
+  border: 1px solid rgba(28,46,68,0.4);
   color: #a8c0d8;
   font-size: 11px;
   font-family: 'JetBrains Mono', monospace;
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 280px;
+  max-height: 300px;
   overflow: auto;
   line-height: 1.5;
-  font-style: normal;
 }
-.step-sub-row.expanded { flex-wrap: wrap; white-space: normal; }
-.step-sub-row.expanded .sub-row-detail { display: block; width: 100%; animation: slideDown 0.15s ease; }
-.step-sub-row.expanded .sub-row-summary { white-space: normal; }
+.step-pre-result { border-left: 2px solid #3a5a78; }
+.step-pre-error { border-left: 2px solid #ff6a96; color: #ff9ab0; }
+.sec-reasoning .step-pre { color: #8a9db0; font-style: italic; }
+.sec-message .step-pre { color: var(--text); font-style: normal; }
 
 /* ─── Side Panels ─── */
 .side {
@@ -1473,69 +1447,36 @@ function createEventEl(ev) {
   return div;
 }
 
-function createSubRow(ev) {
-  const row = document.createElement('div');
-  const isThinking = ev.event_type === 'thinking';
-  const isResult = ev.event_type === 'tool_result';
-  const isText = ev.event_type === 'text';
-  const isTool = !isThinking && !isResult && !isText && ev.source === 'agent';
-
-  row.className = 'step-sub-row'
-    + (isThinking ? ' sub-thinking' : '')
-    + (isResult ? ' sub-tool-result' : '')
-    + (isText ? ' sub-text' : '')
-    + (isTool ? ' sub-tool-call' : '');
-
-  const cfg = EVENT_TYPES[ev.event_type] || EVENT_TYPES.other;
-  let tagHtml = '';
-  if (isTool) {
-    tagHtml = `<span class="event-type-tag" style="background:${cfg.color}1a;color:${cfg.color}">${cfg.label}</span>`;
-  }
-
-  let summaryText = ev.summary || '';
-  if (isThinking) summaryText = summaryText.replace(/^Thinking:\s*/, '');
-  if (isResult) summaryText = summaryText.replace(/^Result:\s*/, '');
-
-  row.innerHTML = `${tagHtml}<span class="sub-row-summary">${escHtml(summaryText)}</span>`;
-
-  if (ev.detail) {
-    const detailEl = document.createElement('div');
-    detailEl.className = 'sub-row-detail';
-    detailEl.textContent = ev.detail;
-    row.appendChild(detailEl);
-  }
-
-  row.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (ev.detail) row.classList.toggle('expanded');
-  });
-
-  return row;
-}
-
 function createStepGroupEl(events) {
   const group = document.createElement('div');
   group.className = 'step-group';
 
-  // Find primary tool call for the header tag
-  const toolCall = events.find(e => e.source === 'agent' && e.event_type !== 'thinking' && e.event_type !== 'text' && e.event_type !== 'tool_result');
-  const firstEvent = events[0];
-  const cfg = toolCall ? (EVENT_TYPES[toolCall.event_type] || EVENT_TYPES.other) : EVENT_TYPES.other;
+  // Classify events
+  const thinkingEvs = events.filter(e => e.event_type === 'thinking');
+  const textEvs = events.filter(e => e.event_type === 'text' && e.source === 'agent');
+  const toolEvs = events.filter(e => e.source === 'agent' && e.event_type !== 'thinking' && e.event_type !== 'text' && e.event_type !== 'tool_result');
+  const resultEvs = events.filter(e => e.event_type === 'tool_result');
+  const otherEvs = events.filter(e => e.source !== 'agent' && e.event_type !== 'tool_result');
 
-  // Aggregate tokens
+  // Results indexed by tool_id
+  const resultsByToolId = {};
+  resultEvs.forEach(e => { if (e.tool_id) resultsByToolId[e.tool_id] = e; });
+
+  // Primary tool for header
+  const primaryTool = toolEvs[0];
+  const firstEvent = events[0];
+  const cfg = primaryTool ? (EVENT_TYPES[primaryTool.event_type] || EVENT_TYPES.other) : (EVENT_TYPES[firstEvent.event_type] || EVENT_TYPES.other);
+
+  // Tokens
   let totalTokens = 0;
-  events.forEach(e => {
-    if (e.tokens) totalTokens += (e.tokens.input_tokens || 0) + (e.tokens.output_tokens || 0);
-  });
+  events.forEach(e => { if (e.tokens) totalTokens += (e.tokens.input_tokens || 0) + (e.tokens.output_tokens || 0); });
   const tokensHtml = totalTokens > 0 ? `<span class="event-tokens">${formatTokens(totalTokens)}</span>` : '';
 
-  // Header summary: use tool call summary or first non-thinking event
-  const headerEvent = toolCall || events.find(e => e.event_type !== 'thinking' && e.event_type !== 'tool_result') || firstEvent;
+  // Header: step_id + tag + summary (from tool call or first meaningful event)
+  const headerEvent = primaryTool || textEvs[0] || firstEvent;
   let headerSummary = headerEvent.summary || '';
   if (headerSummary.startsWith('Thinking:')) headerSummary = headerSummary.replace(/^Thinking:\s*/, '');
-
-  // Determine border color from primary tool type
-  const borderColor = toolCall ? cfg.color : '#5a7490';
+  const borderColor = primaryTool ? cfg.color : '#5a7490';
 
   const header = document.createElement('div');
   header.className = 'step-group-header';
@@ -1549,37 +1490,70 @@ function createStepGroupEl(events) {
   group.style.borderLeftWidth = '3px';
   group.appendChild(header);
 
-  // Body with sub-rows (hidden by default for single-event steps)
+  // Expandable body — Harbor-style sections
   const body = document.createElement('div');
   body.className = 'step-group-body';
-  body.style.display = events.length > 1 ? 'none' : 'none';
+  body.style.display = 'none';
 
-  // Pair tool calls with their results by tool_id
-  const resultsByToolId = {};
-  events.filter(e => e.event_type === 'tool_result' && e.tool_id).forEach(e => {
-    resultsByToolId[e.tool_id] = e;
+  // Section helper
+  function addSection(label, contentHtml, cssClass) {
+    const sec = document.createElement('div');
+    sec.className = 'step-section ' + (cssClass || '');
+    sec.innerHTML = `<div class="step-section-label">${label}</div><div class="step-section-content">${contentHtml}</div>`;
+    body.appendChild(sec);
+  }
+
+  // Reasoning section
+  thinkingEvs.forEach(ev => {
+    const text = (ev.detail || ev.summary || '').replace(/^Thinking:\s*/, '');
+    if (text) addSection('Reasoning', `<pre class="step-pre">${escHtml(text)}</pre>`, 'sec-reasoning');
   });
 
-  events.forEach(e => {
-    // Skip tool_results — they'll be rendered after their tool call
-    if (e.event_type === 'tool_result' && e.tool_id && resultsByToolId[e.tool_id]) return;
-    body.appendChild(createSubRow(e));
-    // Append the matching result right after the tool call
-    if (e.tool_id && resultsByToolId[e.tool_id]) {
-      body.appendChild(createSubRow(resultsByToolId[e.tool_id]));
+  // Agent text (message) section
+  textEvs.forEach(ev => {
+    const text = ev.detail || ev.summary || '';
+    if (text && text !== 'Model turn (no visible content)') addSection('Message', `<pre class="step-pre">${escHtml(text)}</pre>`, 'sec-message');
+  });
+
+  // Tool calls + their results
+  toolEvs.forEach(ev => {
+    const toolCfg = EVENT_TYPES[ev.event_type] || EVENT_TYPES.other;
+    const toolLabel = ev.tool_name || toolCfg.label;
+    const detail = ev.detail || ev.summary || '';
+    let html = `<div class="step-tool-name" style="color:${toolCfg.color}">${escHtml(toolLabel)}</div>`;
+    html += `<pre class="step-pre">${escHtml(detail)}</pre>`;
+
+    // Paired result
+    const result = ev.tool_id ? resultsByToolId[ev.tool_id] : null;
+    if (result) {
+      const resText = result.detail || result.summary || '';
+      const resClean = resText.replace(/^(Result|Error):\s*/, '');
+      const isErr = (result.summary || '').startsWith('Error:');
+      html += `<div class="step-section-label" style="margin-top:8px">${isErr ? 'Error' : 'Result'}</div>`;
+      html += `<pre class="step-pre ${isErr ? 'step-pre-error' : 'step-pre-result'}">${escHtml(resClean)}</pre>`;
     }
+    addSection('Tool Call', html, 'sec-tool');
   });
-  // Append any orphan results (no matching tool_id)
-  events.filter(e => e.event_type === 'tool_result' && (!e.tool_id || !resultsByToolId[e.tool_id])).forEach(e => {
-    body.appendChild(createSubRow(e));
+
+  // Orphan results (no matching tool call)
+  resultEvs.filter(e => !e.tool_id || !toolEvs.some(t => t.tool_id === e.tool_id)).forEach(ev => {
+    const text = (ev.detail || ev.summary || '').replace(/^(Result|Error):\s*/, '');
+    const isErr = (ev.summary || '').startsWith('Error:');
+    addSection(isErr ? 'Error' : 'Result', `<pre class="step-pre ${isErr ? 'step-pre-error' : 'step-pre-result'}">${escHtml(text)}</pre>`, 'sec-result');
+  });
+
+  // Other events (user/system within the step — rare)
+  otherEvs.forEach(ev => {
+    addSection(ev.source, `<pre class="step-pre">${escHtml(ev.detail || ev.summary || '')}</pre>`);
   });
 
   group.appendChild(body);
 
-  // Click header to expand/collapse body
+  // Toggle body on header click
   header.addEventListener('click', () => {
     const isOpen = body.style.display !== 'none';
     body.style.display = isOpen ? 'none' : 'block';
+    group.classList.toggle('step-group-open', !isOpen);
   });
 
   return group;
