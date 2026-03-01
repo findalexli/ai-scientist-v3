@@ -19,4 +19,4 @@ COPY --from=frontend /app/viewer/frontend/build/client /app/viewer/frontend/buil
 
 WORKDIR /app/viewer
 EXPOSE 8080
-CMD ["python3", "app.py", "--port", "8080", "--source", "gitlab"]
+ENTRYPOINT ["python3", "app.py", "--port", "8080", "--source", "gitlab"]
