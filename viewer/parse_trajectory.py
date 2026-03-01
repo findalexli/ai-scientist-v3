@@ -38,6 +38,7 @@ class Event:
     tokens: Optional[dict]  # serialized TokenInfo
     line_num: int
     tool_id: Optional[str] = None
+    step_id: Optional[int] = None  # ATIF step_id — groups events from the same model turn
 
     def to_dict(self):
         return asdict(self)
@@ -464,6 +465,7 @@ def parse_atif_trajectory(path: str, after_line: int = 0) -> ParseResult:
         tokens: Optional[dict] = None,
         timestamp: Optional[str] = None,
         tool_id: Optional[str] = None,
+        step_id: Optional[int] = None,
     ) -> None:
         idx = len(all_events)
         all_events.append(
@@ -478,12 +480,14 @@ def parse_atif_trajectory(path: str, after_line: int = 0) -> ParseResult:
                 tokens=tokens,
                 line_num=idx,
                 tool_id=tool_id,
+                step_id=step_id,
             )
         )
 
     for step in steps:
         source = step.get("source", "agent")
         ts = step.get("timestamp")
+        sid = step.get("step_id")  # ATIF step_id for grouping
         token_info = _extract_tokens_from_metrics(step.get("metrics", {}))
 
         # Fix output_tokens: ATIF reasoning_content is often empty (thinking
@@ -542,6 +546,7 @@ def parse_atif_trajectory(path: str, after_line: int = 0) -> ParseResult:
                     detail=reasoning[:1000] if len(reasoning) > 100 else None,
                     tokens=step_tokens_once(),
                     timestamp=ts,
+                    step_id=sid,
                 )
 
             if message and not (tool_calls and message.startswith("Executed ")):
@@ -552,6 +557,7 @@ def parse_atif_trajectory(path: str, after_line: int = 0) -> ParseResult:
                     detail=message if len(message) > 150 else None,
                     tokens=step_tokens_once(),
                     timestamp=ts,
+                    step_id=sid,
                 )
 
             for call in tool_calls:
@@ -570,6 +576,7 @@ def parse_atif_trajectory(path: str, after_line: int = 0) -> ParseResult:
                     tokens=step_tokens_once(),
                     timestamp=ts,
                     tool_id=tool_id,
+                    step_id=sid,
                 )
 
             obs = step.get("observation", {}) if isinstance(step.get("observation"), dict) else {}
@@ -590,6 +597,7 @@ def parse_atif_trajectory(path: str, after_line: int = 0) -> ParseResult:
                     tokens=None,
                     timestamp=ts,
                     tool_id=call_id,
+                    step_id=sid,
                 )
 
         elif source == "user":
@@ -601,6 +609,7 @@ def parse_atif_trajectory(path: str, after_line: int = 0) -> ParseResult:
                     detail=message if len(message) > 150 else None,
                     tokens=step_tokens_once(),
                     timestamp=ts,
+                    step_id=sid,
                 )
         elif source == "system":
             if message:
@@ -611,6 +620,7 @@ def parse_atif_trajectory(path: str, after_line: int = 0) -> ParseResult:
                     detail=message if len(message) > 150 else None,
                     tokens=step_tokens_once(),
                     timestamp=ts,
+                    step_id=sid,
                 )
         elif message:
             add_event(
@@ -620,6 +630,7 @@ def parse_atif_trajectory(path: str, after_line: int = 0) -> ParseResult:
                 detail=message if len(message) > 150 else None,
                 tokens=step_tokens_once(),
                 timestamp=ts,
+                step_id=sid,
             )
 
         # Keep accounting accurate even if this step produced no visible event.
@@ -631,6 +642,7 @@ def parse_atif_trajectory(path: str, after_line: int = 0) -> ParseResult:
                 detail=None,
                 tokens=step_tokens_once(),
                 timestamp=ts,
+                step_id=sid,
             )
 
     total_lines = len(all_events)
@@ -700,6 +712,7 @@ def parse_claude_code_jsonl(path: str, after_line: int = 0) -> ParseResult:
                 message = entry.get("message", {})
                 usage = message.get("usage", {})
                 content_blocks = message.get("content", [])
+                turn_id = line_num  # Use line_num as unique turn_id for JSONL
 
                 # Accumulate content blocks for output token estimation.
                 msg_id = message.get("id", "")
@@ -751,6 +764,7 @@ def parse_claude_code_jsonl(path: str, after_line: int = 0) -> ParseResult:
                             tokens=msg_tokens_once(),
                             line_num=line_num,
                             tool_id=None,
+                            step_id=turn_id,
                         ))
                         step += 1
 
@@ -767,6 +781,7 @@ def parse_claude_code_jsonl(path: str, after_line: int = 0) -> ParseResult:
                             tokens=msg_tokens_once(),
                             line_num=line_num,
                             tool_id=None,
+                            step_id=turn_id,
                         ))
                         step += 1
 
@@ -789,6 +804,7 @@ def parse_claude_code_jsonl(path: str, after_line: int = 0) -> ParseResult:
                             tokens=msg_tokens_once(),
                             line_num=line_num,
                             tool_id=tool_id,
+                            step_id=turn_id,
                         ))
                         step += 1
 

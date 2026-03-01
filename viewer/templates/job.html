@@ -360,7 +360,7 @@ body::after {
   padding: 10px 12px;
 }
 
-/* ─── Events ─── */
+/* ─── Events (standalone, ungrouped) ─── */
 .event {
   border: 1px solid rgba(28,46,68,0.5);
   border-left: 3px solid var(--border);
@@ -460,6 +460,92 @@ body::after {
 .ev-tool_result { border-left-color: #3a5a78 !important; }
 .ev-system { border-left-color: var(--accent) !important; }
 .ev-subagent { border-left-color: #ff9a80 !important; }
+
+/* ─── Step groups (grouped events from same ATIF step) ─── */
+.step-group {
+  border: 1px solid rgba(28,46,68,0.45);
+  border-radius: 10px;
+  background: rgba(14,24,38,0.6);
+  margin-bottom: 6px;
+  overflow: hidden;
+}
+.step-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.step-group-header:hover { background: rgba(24,40,60,0.5); }
+.step-group-header .event-step { min-width: 36px; }
+
+.step-group-body { padding: 0 0 4px 0; }
+
+.step-sub-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 11px 4px 48px;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.1s;
+  border-left: 2px solid transparent;
+  margin: 0 4px;
+  border-radius: 4px;
+}
+.step-sub-row:hover { background: rgba(24,40,60,0.5); }
+
+.step-sub-row.sub-thinking {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 11.5px;
+}
+.step-sub-row.sub-text {
+  color: var(--text);
+  font-size: 12px;
+}
+.step-sub-row.sub-tool-call {
+  border-left-color: rgba(92,184,255,0.3);
+}
+.step-sub-row.sub-tool-result {
+  padding-left: 64px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.step-sub-row.sub-tool-result::before {
+  content: '\21B3';
+  margin-right: 6px;
+  color: #3a5a78;
+}
+.sub-row-summary {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sub-row-detail {
+  display: none;
+  margin-top: 6px;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(28,46,68,0.5);
+  background: rgba(6,10,16,0.55);
+  color: #a8c0d8;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 280px;
+  overflow: auto;
+  line-height: 1.5;
+  font-style: normal;
+}
+.step-sub-row.expanded { flex-wrap: wrap; white-space: normal; }
+.step-sub-row.expanded .sub-row-detail { display: block; width: 100%; animation: slideDown 0.15s ease; }
+.step-sub-row.expanded .sub-row-summary { white-space: normal; }
 
 /* ─── Side Panels ─── */
 .side {
@@ -1387,6 +1473,118 @@ function createEventEl(ev) {
   return div;
 }
 
+function createSubRow(ev) {
+  const row = document.createElement('div');
+  const isThinking = ev.event_type === 'thinking';
+  const isResult = ev.event_type === 'tool_result';
+  const isText = ev.event_type === 'text';
+  const isTool = !isThinking && !isResult && !isText && ev.source === 'agent';
+
+  row.className = 'step-sub-row'
+    + (isThinking ? ' sub-thinking' : '')
+    + (isResult ? ' sub-tool-result' : '')
+    + (isText ? ' sub-text' : '')
+    + (isTool ? ' sub-tool-call' : '');
+
+  const cfg = EVENT_TYPES[ev.event_type] || EVENT_TYPES.other;
+  let tagHtml = '';
+  if (isTool) {
+    tagHtml = `<span class="event-type-tag" style="background:${cfg.color}1a;color:${cfg.color}">${cfg.label}</span>`;
+  }
+
+  let summaryText = ev.summary || '';
+  if (isThinking) summaryText = summaryText.replace(/^Thinking:\s*/, '');
+  if (isResult) summaryText = summaryText.replace(/^Result:\s*/, '');
+
+  row.innerHTML = `${tagHtml}<span class="sub-row-summary">${escHtml(summaryText)}</span>`;
+
+  if (ev.detail) {
+    const detailEl = document.createElement('div');
+    detailEl.className = 'sub-row-detail';
+    detailEl.textContent = ev.detail;
+    row.appendChild(detailEl);
+  }
+
+  row.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (ev.detail) row.classList.toggle('expanded');
+  });
+
+  return row;
+}
+
+function createStepGroupEl(events) {
+  const group = document.createElement('div');
+  group.className = 'step-group';
+
+  // Find primary tool call for the header tag
+  const toolCall = events.find(e => e.source === 'agent' && e.event_type !== 'thinking' && e.event_type !== 'text' && e.event_type !== 'tool_result');
+  const firstEvent = events[0];
+  const cfg = toolCall ? (EVENT_TYPES[toolCall.event_type] || EVENT_TYPES.other) : EVENT_TYPES.other;
+
+  // Aggregate tokens
+  let totalTokens = 0;
+  events.forEach(e => {
+    if (e.tokens) totalTokens += (e.tokens.input_tokens || 0) + (e.tokens.output_tokens || 0);
+  });
+  const tokensHtml = totalTokens > 0 ? `<span class="event-tokens">${formatTokens(totalTokens)}</span>` : '';
+
+  // Header summary: use tool call summary or first non-thinking event
+  const headerEvent = toolCall || events.find(e => e.event_type !== 'thinking' && e.event_type !== 'tool_result') || firstEvent;
+  let headerSummary = headerEvent.summary || '';
+  if (headerSummary.startsWith('Thinking:')) headerSummary = headerSummary.replace(/^Thinking:\s*/, '');
+
+  // Determine border color from primary tool type
+  const borderColor = toolCall ? cfg.color : '#5a7490';
+
+  const header = document.createElement('div');
+  header.className = 'step-group-header';
+  header.innerHTML = `
+    <span class="event-step">#${firstEvent.step_id || firstEvent.step}</span>
+    <span class="event-type-tag" style="background:${cfg.color}1a;color:${cfg.color}">${cfg.label}</span>
+    <span class="event-summary" title="${escHtml(headerSummary)}">${escHtml(headerSummary)}</span>
+    ${tokensHtml}
+  `;
+  group.style.borderLeftColor = borderColor;
+  group.style.borderLeftWidth = '3px';
+  group.appendChild(header);
+
+  // Body with sub-rows (hidden by default for single-event steps)
+  const body = document.createElement('div');
+  body.className = 'step-group-body';
+  body.style.display = events.length > 1 ? 'none' : 'none';
+
+  // Pair tool calls with their results by tool_id
+  const resultsByToolId = {};
+  events.filter(e => e.event_type === 'tool_result' && e.tool_id).forEach(e => {
+    resultsByToolId[e.tool_id] = e;
+  });
+
+  events.forEach(e => {
+    // Skip tool_results — they'll be rendered after their tool call
+    if (e.event_type === 'tool_result' && e.tool_id && resultsByToolId[e.tool_id]) return;
+    body.appendChild(createSubRow(e));
+    // Append the matching result right after the tool call
+    if (e.tool_id && resultsByToolId[e.tool_id]) {
+      body.appendChild(createSubRow(resultsByToolId[e.tool_id]));
+    }
+  });
+  // Append any orphan results (no matching tool_id)
+  events.filter(e => e.event_type === 'tool_result' && (!e.tool_id || !resultsByToolId[e.tool_id])).forEach(e => {
+    body.appendChild(createSubRow(e));
+  });
+
+  group.appendChild(body);
+
+  // Click header to expand/collapse body
+  header.addEventListener('click', () => {
+    const isOpen = body.style.display !== 'none';
+    body.style.display = isOpen ? 'none' : 'block';
+  });
+
+  return group;
+}
+
 function renderTimeline() {
   const container = document.getElementById('timeline');
   container.innerHTML = '';
@@ -1398,8 +1596,31 @@ function renderTimeline() {
 
   const MAX_INITIAL = 2000;
   const toRender = filtered.length > MAX_INITIAL ? filtered.slice(-MAX_INITIAL) : filtered;
+
+  // Group consecutive events by step_id
   const frag = document.createDocumentFragment();
-  toRender.forEach(ev => frag.appendChild(createEventEl(ev)));
+  let i = 0;
+  while (i < toRender.length) {
+    const ev = toRender[i];
+    if (ev.step_id != null) {
+      // Collect all consecutive events with the same step_id
+      const group = [ev];
+      while (i + 1 < toRender.length && toRender[i + 1].step_id === ev.step_id) {
+        i++;
+        group.push(toRender[i]);
+      }
+      if (group.length === 1 && (ev.source === 'user' || ev.source === 'system')) {
+        // Standalone user/system messages
+        frag.appendChild(createEventEl(ev));
+      } else {
+        frag.appendChild(createStepGroupEl(group));
+      }
+    } else {
+      // No step_id — render as standalone card
+      frag.appendChild(createEventEl(ev));
+    }
+    i++;
+  }
   container.appendChild(frag);
 
   if (filtered.length > MAX_INITIAL) {
