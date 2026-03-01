@@ -1447,10 +1447,7 @@ function createEventEl(ev) {
   return div;
 }
 
-function createStepGroupEl(events) {
-  const group = document.createElement('div');
-  group.className = 'step-group';
-
+function buildStepBody(events) {
   // Classify events
   const thinkingEvs = events.filter(e => e.event_type === 'thinking');
   const textEvs = events.filter(e => e.event_type === 'text' && e.source === 'agent');
@@ -1458,11 +1455,65 @@ function createStepGroupEl(events) {
   const resultEvs = events.filter(e => e.event_type === 'tool_result');
   const otherEvs = events.filter(e => e.source !== 'agent' && e.event_type !== 'tool_result');
 
-  // Results indexed by tool_id
   const resultsByToolId = {};
   resultEvs.forEach(e => { if (e.tool_id) resultsByToolId[e.tool_id] = e; });
 
+  const body = document.createElement('div');
+  body.className = 'step-group-body';
+
+  function addSection(label, contentHtml, cssClass) {
+    const sec = document.createElement('div');
+    sec.className = 'step-section ' + (cssClass || '');
+    sec.innerHTML = `<div class="step-section-label">${label}</div><div class="step-section-content">${contentHtml}</div>`;
+    body.appendChild(sec);
+  }
+
+  thinkingEvs.forEach(ev => {
+    const text = (ev.detail || ev.summary || '').replace(/^Thinking:\s*/, '');
+    if (text) addSection('Reasoning', `<pre class="step-pre">${escHtml(text)}</pre>`, 'sec-reasoning');
+  });
+
+  textEvs.forEach(ev => {
+    const text = ev.detail || ev.summary || '';
+    if (text && text !== 'Model turn (no visible content)') addSection('Message', `<pre class="step-pre">${escHtml(text)}</pre>`, 'sec-message');
+  });
+
+  toolEvs.forEach(ev => {
+    const toolCfg = EVENT_TYPES[ev.event_type] || EVENT_TYPES.other;
+    const toolLabel = ev.tool_name || toolCfg.label;
+    const detail = ev.detail || ev.summary || '';
+    let html = `<div class="step-tool-name" style="color:${toolCfg.color}">${escHtml(toolLabel)}</div>`;
+    html += `<pre class="step-pre">${escHtml(detail)}</pre>`;
+    const result = ev.tool_id ? resultsByToolId[ev.tool_id] : null;
+    if (result) {
+      const resText = result.detail || result.summary || '';
+      const resClean = resText.replace(/^(Result|Error):\s*/, '');
+      const isErr = (result.summary || '').startsWith('Error:');
+      html += `<div class="step-section-label" style="margin-top:8px">${isErr ? 'Error' : 'Result'}</div>`;
+      html += `<pre class="step-pre ${isErr ? 'step-pre-error' : 'step-pre-result'}">${escHtml(resClean)}</pre>`;
+    }
+    addSection('Tool Call', html, 'sec-tool');
+  });
+
+  resultEvs.filter(e => !e.tool_id || !toolEvs.some(t => t.tool_id === e.tool_id)).forEach(ev => {
+    const text = (ev.detail || ev.summary || '').replace(/^(Result|Error):\s*/, '');
+    const isErr = (ev.summary || '').startsWith('Error:');
+    addSection(isErr ? 'Error' : 'Result', `<pre class="step-pre ${isErr ? 'step-pre-error' : 'step-pre-result'}">${escHtml(text)}</pre>`, 'sec-result');
+  });
+
+  otherEvs.forEach(ev => {
+    addSection(ev.source, `<pre class="step-pre">${escHtml(ev.detail || ev.summary || '')}</pre>`);
+  });
+
+  return body;
+}
+
+function createStepGroupEl(events) {
+  const group = document.createElement('div');
+  group.className = 'step-group';
+
   // Primary tool for header
+  const toolEvs = events.filter(e => e.source === 'agent' && e.event_type !== 'thinking' && e.event_type !== 'text' && e.event_type !== 'tool_result');
   const primaryTool = toolEvs[0];
   const firstEvent = events[0];
   const cfg = primaryTool ? (EVENT_TYPES[primaryTool.event_type] || EVENT_TYPES.other) : (EVENT_TYPES[firstEvent.event_type] || EVENT_TYPES.other);
@@ -1472,7 +1523,8 @@ function createStepGroupEl(events) {
   events.forEach(e => { if (e.tokens) totalTokens += (e.tokens.input_tokens || 0) + (e.tokens.output_tokens || 0); });
   const tokensHtml = totalTokens > 0 ? `<span class="event-tokens">${formatTokens(totalTokens)}</span>` : '';
 
-  // Header: step_id + tag + summary (from tool call or first meaningful event)
+  // Header summary
+  const textEvs = events.filter(e => e.event_type === 'text' && e.source === 'agent');
   const headerEvent = primaryTool || textEvs[0] || firstEvent;
   let headerSummary = headerEvent.summary || '';
   if (headerSummary.startsWith('Thinking:')) headerSummary = headerSummary.replace(/^Thinking:\s*/, '');
@@ -1490,70 +1542,17 @@ function createStepGroupEl(events) {
   group.style.borderLeftWidth = '3px';
   group.appendChild(header);
 
-  // Expandable body — Harbor-style sections
-  const body = document.createElement('div');
-  body.className = 'step-group-body';
-  body.style.display = 'none';
-
-  // Section helper
-  function addSection(label, contentHtml, cssClass) {
-    const sec = document.createElement('div');
-    sec.className = 'step-section ' + (cssClass || '');
-    sec.innerHTML = `<div class="step-section-label">${label}</div><div class="step-section-content">${contentHtml}</div>`;
-    body.appendChild(sec);
-  }
-
-  // Reasoning section
-  thinkingEvs.forEach(ev => {
-    const text = (ev.detail || ev.summary || '').replace(/^Thinking:\s*/, '');
-    if (text) addSection('Reasoning', `<pre class="step-pre">${escHtml(text)}</pre>`, 'sec-reasoning');
-  });
-
-  // Agent text (message) section
-  textEvs.forEach(ev => {
-    const text = ev.detail || ev.summary || '';
-    if (text && text !== 'Model turn (no visible content)') addSection('Message', `<pre class="step-pre">${escHtml(text)}</pre>`, 'sec-message');
-  });
-
-  // Tool calls + their results
-  toolEvs.forEach(ev => {
-    const toolCfg = EVENT_TYPES[ev.event_type] || EVENT_TYPES.other;
-    const toolLabel = ev.tool_name || toolCfg.label;
-    const detail = ev.detail || ev.summary || '';
-    let html = `<div class="step-tool-name" style="color:${toolCfg.color}">${escHtml(toolLabel)}</div>`;
-    html += `<pre class="step-pre">${escHtml(detail)}</pre>`;
-
-    // Paired result
-    const result = ev.tool_id ? resultsByToolId[ev.tool_id] : null;
-    if (result) {
-      const resText = result.detail || result.summary || '';
-      const resClean = resText.replace(/^(Result|Error):\s*/, '');
-      const isErr = (result.summary || '').startsWith('Error:');
-      html += `<div class="step-section-label" style="margin-top:8px">${isErr ? 'Error' : 'Result'}</div>`;
-      html += `<pre class="step-pre ${isErr ? 'step-pre-error' : 'step-pre-result'}">${escHtml(resClean)}</pre>`;
-    }
-    addSection('Tool Call', html, 'sec-tool');
-  });
-
-  // Orphan results (no matching tool call)
-  resultEvs.filter(e => !e.tool_id || !toolEvs.some(t => t.tool_id === e.tool_id)).forEach(ev => {
-    const text = (ev.detail || ev.summary || '').replace(/^(Result|Error):\s*/, '');
-    const isErr = (ev.summary || '').startsWith('Error:');
-    addSection(isErr ? 'Error' : 'Result', `<pre class="step-pre ${isErr ? 'step-pre-error' : 'step-pre-result'}">${escHtml(text)}</pre>`, 'sec-result');
-  });
-
-  // Other events (user/system within the step — rare)
-  otherEvs.forEach(ev => {
-    addSection(ev.source, `<pre class="step-pre">${escHtml(ev.detail || ev.summary || '')}</pre>`);
-  });
-
-  group.appendChild(body);
-
-  // Toggle body on header click
+  // Lazy-mount body: only build DOM on first expand
+  let body = null;
+  let isOpen = false;
   header.addEventListener('click', () => {
-    const isOpen = body.style.display !== 'none';
-    body.style.display = isOpen ? 'none' : 'block';
-    group.classList.toggle('step-group-open', !isOpen);
+    if (!body) {
+      body = buildStepBody(events);
+      group.appendChild(body);
+    }
+    isOpen = !isOpen;
+    body.style.display = isOpen ? 'block' : 'none';
+    group.classList.toggle('step-group-open', isOpen);
   });
 
   return group;
