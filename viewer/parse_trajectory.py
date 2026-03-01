@@ -153,7 +153,23 @@ def _categorize_tool(name: str, tool_input: dict) -> str:
             return "paper_write"
         if "matplotlib" in cmd or "create_figures" in cmd:
             return "plotting"
-        if any(kw in cmd for kw in ["semantic_scholar", "openalex", "S2_API_KEY"]):
+        # Literature search: API calls, paper downloads, arxiv fetches
+        _lit_kw = (
+            "semantic_scholar", "openalex", "S2_API_KEY",
+            "crossref", "dx.doi.org", "api.semanticscholar",
+            "api.openalex.org", "api.openreview.net",
+        )
+        if any(kw in cmd for kw in _lit_kw):
+            return "literature_review"
+        # Downloading/moving papers into literature/ (but NOT artifact copies)
+        if (
+            "literature/" in cmd
+            and any(dl in cmd for dl in ("curl ", "wget ", "mkdir -p"))
+            and "/logs/agent/artifacts" not in cmd
+        ):
+            return "literature_review"
+        # Direct arxiv PDF/abstract fetches
+        if any(d in cmd for d in ("arxiv.org/pdf", "arxiv.org/abs", "ar5iv.labs.arxiv.org")):
             return "literature_review"
         return "bash"
 
@@ -163,11 +179,15 @@ def _categorize_tool(name: str, tool_input: dict) -> str:
         "glob_search",
         "list_directory",
     }:
+        path = tool_input.get("file_path") or tool_input.get("path") or tool_input.get("pattern") or ""
+        if "/literature/" in path:
+            return "literature_review"
         return "file_read"
 
     if name in ("Write", "Edit") or lname in {"write_file", "edit_file", "update_file", "replace_in_file"}:
-        # Check if writing to tex/bib or figures
         path = tool_input.get("file_path") or tool_input.get("path") or ""
+        if "/literature/" in path:
+            return "literature_review"
         if any(ext in path for ext in [".tex", ".bib"]) or "/latex/" in path:
             return "paper_write"
         if "/figures/" in path:
@@ -183,6 +203,18 @@ def _categorize_tool(name: str, tool_input: dict) -> str:
         "fetch_url",
         "google_search",
     }:
+        url = tool_input.get("url", "")
+        query = tool_input.get("query", "")
+        prompt_text = tool_input.get("prompt", "")
+        combined = f"{url} {query} {prompt_text}".lower()
+        _academic = (
+            "arxiv.org", "ar5iv.labs.", "semanticscholar.org",
+            "openalex.org", "openreview.net", "scholar.google",
+            "doi.org/10.", "aclanthology.org",
+            "proceedings.neurips", "proceedings.mlr.press",
+        )
+        if any(sig in combined for sig in _academic):
+            return "literature_review"
         return "web"
 
     if name in ("TodoWrite", "TaskCreate", "TaskUpdate", "TaskGet", "TaskList", "TaskOutput", "TaskStop"):
