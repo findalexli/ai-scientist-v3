@@ -17,5 +17,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 COPY --from=frontend /app/viewer/frontend/build/client /app/viewer/frontend/build/client
 
+WORKDIR /app/viewer
 EXPOSE 8080
-CMD ["python3", "viewer/app.py", "--port", "8080", "--source", "gitlab"]
+CMD ["python3", "app.py", "--port", "8080", "--source", "gitlab"]
