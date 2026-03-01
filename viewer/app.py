@@ -865,7 +865,8 @@ async def api_job_meta(job_id: str):
             if repo["id"] == project_id:
                 meta["gitlab_url"] = f"{repo['web_url']}/-/tree/{branch}"
                 break
-    return JSONResponse(mask_secrets(meta))
+    job_dir = os.path.join(JOBS_DIR, job_id)
+    return JSONResponse(mask_secrets(meta), headers=_cache_headers_for_job(job_dir))
 
 
 # Server-side cache for parsed events (keyed by job_id:after_line).
@@ -886,6 +887,13 @@ _CDN_CACHE_1H = {
     "Cache-Control": "public, max-age=3600",
     "CDN-Cache-Control": "public, max-age=3600",
 }
+
+
+def _cache_headers_for_job(job_dir: str) -> dict:
+    """Return CDN cache headers if the job is completed (immutable data)."""
+    if get_job_status(job_dir) == "completed":
+        return _CDN_CACHE_24H
+    return {}
 
 
 @app.get("/api/jobs/{job_id}/events")
@@ -935,7 +943,7 @@ async def api_events(job_id: str, after: int = 0):
         "total_lines": result.total_lines,
         "session_id": result.session_id,
         "model": result.model,
-    })
+    }, headers=_cache_headers_for_job(job_dir))
 
 
 @app.get("/api/jobs/{job_id}/stream")
@@ -1025,7 +1033,7 @@ async def api_tokens(job_id: str):
         "cumulative_tokens": metrics.get("cumulative_tokens") or [],
         "tool_breakdown": metrics.get("tool_breakdown") or [],
         "event_type_breakdown": metrics.get("event_type_breakdown") or [],
-    }))
+    }), headers=_cache_headers_for_job(job_dir))
 
 
 @app.get("/api/jobs/{job_id}/idea")
@@ -1056,7 +1064,8 @@ async def api_job_idea(job_id: str):
         return JSONResponse({"error": "Job not found"}, status_code=404)
 
     config = read_config(job_dir)
-    return JSONResponse(load_idea_payload(job_id, config, job_dir=job_dir))
+    return JSONResponse(load_idea_payload(job_id, config, job_dir=job_dir),
+                        headers=_cache_headers_for_job(job_dir))
 
 
 @app.get("/api/jobs/{job_id}/submissions")
@@ -1109,7 +1118,8 @@ async def api_submissions(job_id: str):
         return JSONResponse({"error": "Job not found"}, status_code=404)
 
     submissions = build_submission_records(job_dir, job_id)
-    return JSONResponse({"submissions": submissions, "total": len(submissions)})
+    return JSONResponse({"submissions": submissions, "total": len(submissions)},
+                        headers=_cache_headers_for_job(job_dir))
 
 
 @app.get("/api/jobs/{job_id}/submissions/{submission_dir}/paper")
@@ -1192,7 +1202,8 @@ async def api_artifacts(job_id: str):
     if os.path.isdir(latex_dir):
         papers = [f for f in os.listdir(latex_dir) if f.endswith((".tex", ".pdf"))]
 
-    return JSONResponse(mask_secrets({"figures": figures, "papers": papers}))
+    return JSONResponse(mask_secrets({"figures": figures, "papers": papers}),
+                        headers=_cache_headers_for_job(job_dir))
 
 
 @app.get("/api/jobs/{job_id}/trajectory")
@@ -1241,7 +1252,7 @@ async def api_trajectory(job_id: str, regenerate: bool = False):
     try:
         with open(traj_path) as f:
             data = json.load(f)
-        return JSONResponse(mask_secrets(data))
+        return JSONResponse(mask_secrets(data), headers=_cache_headers_for_job(job_dir))
     except (json.JSONDecodeError, OSError) as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
@@ -1400,7 +1411,7 @@ async def api_trajectory_step(job_id: str, step_id: int):
     # Try O(1) byte-offset read.
     step_data = read_single_step(traj_path, byte_offset, byte_length)
     if step_data is not None:
-        return JSONResponse(mask_secrets(step_data))
+        return JSONResponse(mask_secrets(step_data), headers=_CDN_CACHE_24H)
 
     # Fallback: load the full file and index into steps array.
     try:
@@ -1408,7 +1419,7 @@ async def api_trajectory_step(job_id: str, step_id: int):
             data = json.load(f)
         steps = data.get("steps", [])
         if step_id < len(steps):
-            return JSONResponse(mask_secrets(steps[step_id]))
+            return JSONResponse(mask_secrets(steps[step_id]), headers=_CDN_CACHE_24H)
     except (json.JSONDecodeError, OSError):
         pass
 
