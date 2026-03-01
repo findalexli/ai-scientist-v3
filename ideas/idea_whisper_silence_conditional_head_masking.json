@@ -1,0 +1,25 @@
+{
+  "Name": "whisper_calm_nospeech_schm",
+  "Title": "Silence-Conditional Decoder Head Masking for Whisper Non-Speech Hallucinations",
+  "Short Hypothesis": "Masking Whisper's hallucinatory decoder heads {1,6,11} only when p_no_speech is high will preserve most of the hallucination reduction of always-masking while recovering most of the WER loss on speech -- a Pareto-dominant inference-time tradeoff requiring no training.",
+  "Related Work": "Calm-Whisper (Wang et al., 2025) identifies hallucinatory decoder heads via head-wise masking and reduces hallucinations via selective head fine-tuning. Careless Whisper (Koenecke et al., 2024) documents hallucination harms in ASR. Whisper (Radford et al., 2022) includes no_speech_threshold heuristic. WhisperX (Bain et al., 2023) uses VAD preprocessing. No prior work proposes no-speech-triggered decoder head masking for hallucination mitigation.",
+  "Code References": [
+    {
+      "url": "https://github.com/openai/whisper",
+      "notes": "Base Whisper model repository"
+    }
+  ],
+  "Experiment Plan": {
+    "model": "openai/whisper-large-v3 (~3GB VRAM on RTX 5080)",
+    "benchmarks": ["UrbanSound8K (hallucination rate)", "LibriSpeech test-clean/test-other (WER)"],
+    "conditions": ["(A) Default Whisper", "(B) Always-mask heads {1,6,11}", "(C) SCHM with tau=0.6"],
+    "notes": [
+      "Training-free inference-only modification",
+      "Whisper-large-v3 is only ~3GB VRAM -- trivially fits RTX 5080",
+      "Cannot use Gemini API (needs model internals for head masking)",
+      "Quality score: 3.8 (highest among inference-only ideas)",
+      "Phase-1 go/no-go: refute if <30% of hallucinating clips have p_no_speech > 0.5",
+      "All datasets available from HuggingFace"
+    ]
+  }
+}

@@ -20,18 +20,38 @@ v2 used ~5000 lines of Python to orchestrate a 4-stage BFS tree search with hard
 
 ## Quick Start
 
+Three ways to use AI Scientist v3, from simplest to most production-ready:
+
+| Mode | What it does | Requirements |
+|------|-------------|--------------|
+| **Interactive** | `claude` in the repo — you steer the research | Claude Code CLI |
+| **Harbor** | Headless agents in Docker, results in `jobs/` | Docker + Harbor |
+| **Harbor + GitLab** | Same, plus artifact storage, cross-run memory, remote viewer | + `GITLAB_KEY` |
+
+### Interactive Mode (No Docker)
+
+```bash
+cd ai-scientist-v3
+claude
+> Read ideas/idea_tabulartransformer.json and conduct this research
+```
+
+The `/search-papers` skill and `scripts/submit_for_review.sh` work against the local filesystem. No isolation — artifacts write directly to the repo directory. Good for exploring ideas or developing experiments before committing to a full run.
+
 ### Harbor Mode (Isolated Docker)
 
 ```bash
-./run.sh idea_tabulartransformer.json                                                # Default: Claude Opus 4.6, 2hr timeout
-./run.sh idea_tabulartransformer.json --model anthropic/claude-sonnet-4-5-20250929   # Use Sonnet
-./run.sh idea_tabulartransformer.json --agent gemini-cli                             # Use Gemini CLI
-./run.sh idea_tabulartransformer.json --agent gemini-cli --model google/gemini-3.1-pro-preview  # Gemini + custom model
-./run.sh idea_tabulartransformer.json --timeout 7200                                 # 2hr timeout
-./run.sh idea_tabulartransformer.json --gpus 1                                       # Local Docker with GPU
-./run.sh idea_tabulartransformer.json --env modal --gpus 1                           # Modal cloud with GPU
-./run.sh idea_tabulartransformer.json --env modal --gpus 1 --artifact-sync-interval 120
+./run.sh ideas/idea_tabulartransformer.json                                                # Default: Claude Opus 4.6, 2hr timeout
+./run.sh ideas/idea_tabulartransformer.json --model anthropic/claude-sonnet-4-5-20250929   # Use Sonnet
+./run.sh ideas/idea_tabulartransformer.json --agent gemini-cli                             # Use Gemini CLI
+./run.sh ideas/idea_tabulartransformer.json --agent gemini-cli --model google/gemini-3.1-pro-preview  # Gemini + custom model
+./run.sh ideas/idea_tabulartransformer.json --timeout 7200                                 # 2hr timeout
+./run.sh ideas/idea_tabulartransformer.json --gpus 1                                       # Local Docker with GPU
+./run.sh ideas/idea_tabulartransformer.json --env modal --gpus 1                           # Modal cloud with GPU
+./run.sh ideas/idea_tabulartransformer.json --env modal --gpus 1 --artifact-sync-interval 120
 ```
+
+Each run is fully isolated in a Docker container. Results are collected in `jobs/{idea}_{timestamp}/` on the host. Monitor runs with the [viewer](#viewing-job-results).
 
 ### Agent Selection
 
@@ -59,41 +79,31 @@ improve reliability without modifying Harbor source code:
 
 Use `--use-upstream-agent` if you want Harbor's built-in agent behavior (no artifact sync).
 
-### Interactive Mode (No Docker)
-
-```bash
-cd ai_scientist_v3
-claude
-> Read idea_tabulartransformer.json and conduct this research
-```
-
-The `/search-papers` skill and `scripts/submit_for_review.sh` work against the local filesystem. No isolation — artifacts write directly to the repo directory.
-
 ## Architecture
 
 ```
 ai_scientist_v3/
+├── ideas/                                   # Research idea JSONs (input to run.sh)
 ├── .claude/
 │   ├── CLAUDE.md                           # Project context + conventions
 │   └── skills/
-│       ├── search-papers/                  # /search-papers — 3-API stack (S2, OpenReview, CrossRef)
-│       │   ├── SKILL.md
-│       │   └── reference.md               # Full API endpoint reference
-│       └── review-paper/
-│           ├── scripts/                    # LaTeX extraction + questions API
-│           └── examples/                   # Fewshot calibration reviews
+│       └── search-papers/                  # /search-papers — 3-API stack (S2, OpenReview, CrossRef)
+│           ├── SKILL.md
+│           └── reference.md               # Full API endpoint reference
 ├── harbor-task/
 │   ├── instruction.md.template             # Research prompt ({{IDEA_CONTENT}} placeholder)
 │   ├── task.toml                           # Container config (CPU, memory, timeout)
 │   ├── environment/
 │   │   ├── Dockerfile.cpu                  # python:3.12-slim + LaTeX + scikit-learn + Claude Code CLI
-│   │   ├── Dockerfile.gpu                  # pytorch + CUDA + LaTeX + scikit-learn + Claude Code CLI
-│   │   └── .gitignore.agent               # Git ignore for agent workspace repos
+│   │   └── Dockerfile.gpu                  # pytorch + CUDA + LaTeX + scikit-learn + Claude Code CLI
 │   └── tests/test.sh                       # Verifier (checks artifacts, produces reward)
 ├── scripts/
 │   ├── compile_latex.sh                   # pdflatex + bibtex + chktex
 │   ├── submit_for_review.sh              # Self-review (Claude/Gemini) or external API + versioned snapshot
+│   ├── push_to_gitlab.py                  # Post-run: sanitize + push artifacts to GitLab
 │   └── gitlab_setup.py                   # Create GitLab repos per idea (optional)
+├── viewer/                                  # Web dashboard (local or GitLab mode)
+│   └── app.py                             # FastAPI app — job list, trajectories, papers, reviews
 ├── blank_icbinb_latex/                     # ICLR 2025 workshop LaTeX template
 └── docs/                                   # Claude Code documentation reference
 ```
@@ -113,7 +123,7 @@ Source templates are never modified — `run.sh` generates `instruction.md` and 
 ### Resuming a Timed-Out Run
 
 ```bash
-./run.sh idea_tabulartransformer.json --resume-from jobs/2026-02-14__12-10-51/ --timeout 7200
+./run.sh ideas/idea_tabulartransformer.json --resume-from jobs/2026-02-14__12-10-51/ --timeout 7200
 ```
 
 This bakes the previous run's artifacts into the new container and injects a "Resumed Session" section so the agent continues rather than starts over.
@@ -123,7 +133,7 @@ This bakes the previous run's artifacts into the new container and injects a "Re
 After reviewing a run's output, you can send feedback to steer the next run:
 
 ```bash
-./run.sh idea_tabulartransformer.json --resume-from jobs/2026-02-14__12-10-51/ --feedback "The ablation study is missing a comparison without the temporal zoom component. Also add error bars to Figure 3."
+./run.sh ideas/idea_tabulartransformer.json --resume-from jobs/2026-02-14__12-10-51/ --feedback "The ablation study is missing a comparison without the temporal zoom component. Also add error bars to Figure 3."
 ```
 
 The `--feedback` text is injected into the instruction as a "Feedback from Previous Run" section. The agent sees it at the start of the session and prioritizes addressing it. Combine with `--resume-from` so the agent builds on existing artifacts rather than starting over.
@@ -134,10 +144,10 @@ The `--feedback` text is injected into the instruction as a "Feedback from Previ
 
 ```bash
 # Local Docker — requires NVIDIA Container Toolkit
-./run.sh idea_tabulartransformer.json --gpus 1
+./run.sh ideas/idea_tabulartransformer.json --gpus 1
 
 # Modal cloud
-./run.sh idea_tabulartransformer.json --env modal --gpus 1
+./run.sh ideas/idea_tabulartransformer.json --env modal --gpus 1
 ```
 
 When `--gpus` is specified:
@@ -165,9 +175,26 @@ Without `GITLAB_KEY`, everything works as before — no git, no push, no GitLab 
 
 ### Viewing Job Results
 
+A web viewer shows job status, token usage, cost, trajectories (every tool call), paper PDFs, figures, and the full reviewer conversation per submission version.
+
+**Local mode** — reads completed jobs from `jobs/` on disk:
+
 ```bash
-harbor view jobs
+cd viewer && pip install -r requirements.txt
+python3 app.py --source local
+# → http://localhost:8000
 ```
+
+**GitLab mode** — reads from GitLab API (works from any machine, no local `jobs/` needed):
+
+```bash
+python3 viewer/app.py --source gitlab
+# → http://localhost:8000
+```
+
+Auto-detects GitLab if `GITLAB_KEY` is set. A deployed version runs at [aiscientist.lishengzhi.com](https://aiscientist.lishengzhi.com/) via Railway in GitLab mode.
+
+You can also use Harbor's built-in viewer: `harbor view jobs`.
 
 ## How It Works
 

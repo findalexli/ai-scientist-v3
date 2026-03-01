@@ -1,0 +1,28 @@
+{
+  "Name": "hubness_penalty_metric_repair",
+  "Title": "Mean-Direction Deflation Reranking: Deployment-Time Repair for Metric Misuse in Frozen Vector Search",
+  "Short Hypothesis": "A rank-one mean-direction deflation reranker applied to the top-M candidates from a frozen inner-product index will substantially improve task-centric metrics on Iceberg's extreme metric-misuse regimes, recovering at least 25% of the performance gap to a Euclidean-distance ceiling -- and a coverage diagnostic can detect when reranking is impossible.",
+  "Related Work": "Iceberg (Chen et al., 2025) exposes extreme metric misuse where IP retrieval yields Label Recall@100 < 1% despite Synthetic Recall ~100%. Centering Similarity (Suzuki et al., 2013) shows mean-centering reduces hubs. Test-Time DN (Zhou et al., 2023) applies mean-based normalization at inference. QB-Norm (Bogolin et al., 2021) and NNN (Chowdhury et al., 2024, EMNLP) use query/gallery banks for hubness reduction. Hubs in Space (Radovanovic et al., 2010) links hubness to proximity to the data mean. No prior work applies query-dependent mean-direction deflation to Iceberg's metric-misuse setting.",
+  "Code References": [
+    {
+      "url": "https://github.com/ZJU-DAILY/Iceberg",
+      "notes": "Iceberg benchmark codebase"
+    },
+    {
+      "url": "https://huggingface.co/datasets/PIIR/Iceberg-dataset",
+      "notes": "Precomputed embeddings for ImageNet-EVA02 and BookCorpus"
+    }
+  ],
+  "Experiment Plan": {
+    "model": "No LLM needed -- pure vector math with numpy and FAISS",
+    "benchmarks": ["Iceberg ImageNet-EVA02 (1.28M vectors, Label Recall@100)", "Iceberg BookCorpus (9.25M vectors, Hit@100)"],
+    "notes": [
+      "Training-free, no LLM needed at all",
+      "RTX 5080 more than sufficient (primary dataset ~5.2GB)",
+      "Quality score: 3.89 (highest among all repos)",
+      "Existing results: 48.7% gap recovery on ImageNet-EVA02 at M=100K",
+      "Mixed results on BookCorpus (near-isotropic space) -- honest nuanced paper",
+      "Mathematically elegant: s_defl(q,x) = q^T x - beta * alpha(q) * mu^T x"
+    ]
+  }
+}

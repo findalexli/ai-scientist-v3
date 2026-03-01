@@ -1,0 +1,24 @@
+{
+  "Name": "view_disagreement_escalation_trajectory_judges",
+  "Title": "Counterfactual-View Disagreement Escalation for Robust Web-Agent Trajectory Judges",
+  "Short Hypothesis": "Using View1 (with CoT) vs View2 (no CoT) disagreement as a trigger for selective escalation to a stricter, evidence-anchored rubric prompt will improve the precision-recall-cost frontier for web-agent trajectory judges -- because disagreement concentrates cases where the judge relies on narrative fields not supported by observable evidence.",
+  "Related Work": "AgentRewardBench (Lu et al., 2025) benchmarks trajectory judges on 1,302 expert-annotated web-agent trajectories. Gaming the Judge (Khalifa et al., 2025) shows CoT rewriting inflates false positives. WebJudge/An Illusion of Progress (Xue et al., 2025) proposes rubric-based evidence-anchored evaluation. DAFE/CLEV (Badshah et al., 2025) uses dynamic arbitration triggered by judge disagreement. No prior work uses counterfactual input-view disagreement (with-CoT vs no-CoT) as a selective escalation trigger for trajectory judges.",
+  "Code References": [
+    {
+      "url": "https://github.com/McGill-NLP/agent-reward-bench",
+      "files": ["agent_reward_bench/"],
+      "notes": "AgentRewardBench evaluation framework. Dataset at https://huggingface.co/datasets/McGill-NLP/agent-reward-bench"
+    }
+  ],
+  "Experiment Plan": {
+    "model": "gemini-2.5-flash (replacing Llama-3.3-70B from original)",
+    "benchmarks": ["AgentRewardBench (1,302 trajectories, 811 failure cases in test set)"],
+    "notes": [
+      "Fully prompt-based -- works entirely via Gemini API",
+      "Core innovation is a prompting strategy, model-agnostic",
+      "Existing results: delta-FPR reduced from +11.71% to +4.31% (63% improvement)",
+      "Only 10-16% of trajectories escalated (efficient)",
+      "Long trajectories may need long-context Gemini calls"
+    ]
+  }
+}

@@ -1,15 +1,15 @@
 #!/bin/bash
 # Run an AI Scientist experiment in Harbor
 #
-# Usage: ./run.sh <idea_*.json> [OPTIONS]
+# Usage: ./run.sh <ideas/idea_*.json> [OPTIONS]
 #
 # Examples:
-#   ./run.sh idea_tabulartransformer.json                              # Local Docker, CPU
-#   ./run.sh idea_tabulartransformer.json --gpus 1                     # Local Docker, GPU
-#   ./run.sh idea_tabulartransformer.json --model anthropic/claude-sonnet-4-5-20250929
-#   ./run.sh idea_tabulartransformer.json --env modal --gpus 1         # Modal cloud, GPU
-#   ./run.sh idea_tabulartransformer.json --resume-from jobs/tabulartransformer__2026-02-22__12-00-00/
-#   ./run.sh idea_videoqa_with_tool.json --agent gemini-cli            # Gemini CLI agent
+#   ./run.sh ideas/idea_tabulartransformer.json                              # Local Docker, CPU
+#   ./run.sh ideas/idea_tabulartransformer.json --gpus 1                     # Local Docker, GPU
+#   ./run.sh ideas/idea_tabulartransformer.json --model anthropic/claude-sonnet-4-5-20250929
+#   ./run.sh ideas/idea_tabulartransformer.json --env modal --gpus 1         # Modal cloud, GPU
+#   ./run.sh ideas/idea_tabulartransformer.json --resume-from jobs/tabulartransformer__2026-02-22__12-00-00/
+#   ./run.sh ideas/idea_videoqa_with_tool.json --agent gemini-cli            # Gemini CLI agent
 
 set -euo pipefail
 

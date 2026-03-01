@@ -1,0 +1,17 @@
+{
+  "Name": "lww_memory_conflict_resolution",
+  "Title": "Last-Write-Wins Overwrite Semantics for Conflict Resolution in LLM Memory Agents",
+  "Short Hypothesis": "When an LLM agent encounters contradictory factual updates across multi-hop reasoning in long-context memory, returning only the most recent version of each fact (Last-Write-Wins) will dramatically improve accuracy compared to returning all versions or using standard RAG retrieval.",
+  "Related Work": "MemoryAgentBench (Hu et al., 2025) evaluates memory agents on incremental multi-turn interactions and identifies conflict resolution as a key challenge. Zep (2025) proposes temporal knowledge graph architecture for agent memory. MemGPT (Packer et al., 2023) treats LLMs as operating systems with memory management. Mem0 (Chhikara et al., 2025) builds production-ready AI agents with scalable long-term memory. No prior work applies deterministic Last-Write-Wins overwrite semantics from distributed systems to LLM memory agents.",
+  "Experiment Plan": {
+    "model": "gemini-2.5-flash (substituting gpt-4o-mini from original)",
+    "benchmarks": ["MemoryAgentBench FactConsolidation at 262K tokens (100 single-hop + 100 multi-hop questions)"],
+    "conditions": ["(A) Contriever RAG baseline", "(B) IE + version store, ALL versions", "(C) IE + version store, LATEST only (LWW)"],
+    "notes": [
+      "Fully API-based -- zero GPU needed",
+      "Gemini API credits directly usable for triple extraction, query planning, and answer generation",
+      "Existing results: +17pp multi-hop accuracy (p=0.0003)",
+      "Quality score: 3.89"
+    ]
+  }
+}

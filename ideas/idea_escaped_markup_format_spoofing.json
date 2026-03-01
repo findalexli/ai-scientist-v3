@@ -1,0 +1,18 @@
+{
+  "Name": "escaped_markup_judges_format_spoofing",
+  "Title": "Escaped Markup: Preventing Verdict Spoofing in Structured Multimodal LLM Judges",
+  "Short Hypothesis": "Appending a non-imperative verdict-spoof suffix that imitates the judge's reserved markup (e.g., \\boxed{Response X is better}) will cause substantial attack success on structured multimodal judges, and a training-free reserved-token escaping wrapper will reduce attack success by a large margin with minimal clean-accuracy loss.",
+  "Related Work": "PhyCritic (Xiong et al., 2026) trains a multimodal critic using structured prompts with \\boxed{} verdicts. VL-RewardBench (CVPR 2025) benchmarks multimodal preference judges. JudgeDeceiver shows optimization-based suffix attacks flip judge preferences. Spotlighting (2024) proposes encoding transformations for prompt injection defense. GCG (Zou et al., 2023) introduces gradient-based adversarial suffix generation. No prior work specifically evaluates \\boxed{} verdict spoofing attacks on structured multimodal judges or proposes reserved-sequence escaping as a defense.",
+  "Experiment Plan": {
+    "model": "Qwen2.5-VL-7B-Instruct (~14GB on RTX 5080) + Gemini for cross-model testing",
+    "benchmarks": ["VL-RewardBench (1,247 image+query preference pairs)"],
+    "notes": [
+      "Training-free inference only",
+      "Fits RTX 5080 (Qwen2.5-VL-7B in bf16 ~14GB)",
+      "Can extend to test Gemini as judge (novel cross-model contribution)",
+      "Existing results: 66.6% conditional ASR, escaping reduces to 27.2% (39pp reduction)",
+      "Paper partially written with LaTeX template and diagrams",
+      "NL-only attacks have similar ASR (62.5%) -- nuanced finding for discussion"
+    ]
+  }
+}

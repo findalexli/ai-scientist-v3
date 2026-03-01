@@ -1,0 +1,18 @@
+{
+  "Name": "delta_map_belief_updates",
+  "Title": "Delta-Map Belief Updates for Stable Spatial Revision in Theory of Space",
+  "Short Hypothesis": "Providing a VLM with an explicit prior cognitive map and enforcing incremental delta updates (preserve-unless-evidenced, overwrite-on-contradiction) reduces belief drift and false-belief inertia in the Theory of Space spatial reasoning benchmark compared to scratch regeneration.",
+  "Related Work": "Theory of Space (ArXiv 2602.07055, Feb 2026) is a very recent benchmark evaluating VLMs on spatial reasoning under partial observability. It identified 'belief inertia' as a key failure mode but tested no interventions. Thinking in Space (CVPR 2025) explores cognitive maps for spatial reasoning. SpatialBench (Nov 2025) evaluates spatial understanding. No prior work tests incremental belief revision interventions on the ToS benchmark.",
+  "Experiment Plan": {
+    "model": "gemini-2.5-pro (already native in codebase)",
+    "benchmarks": ["Theory-of-Space offline vision-world benchmark (25 scenes)"],
+    "conditions": ["(A) Scratch regeneration each step", "(B) Full regeneration with explicit update rules", "(C) Delta-only JSON output applied programmatically"],
+    "notes": [
+      "ALREADY uses Gemini API natively -- zero re-implementation needed",
+      "Zero GPU requirement (API-only inference)",
+      "~1,800 multimodal API calls to Gemini",
+      "Existing results: +3.4% overall accuracy, +13.3% facing direction accuracy",
+      "First intervention study on ToS belief maintenance"
+    ]
+  }
+}

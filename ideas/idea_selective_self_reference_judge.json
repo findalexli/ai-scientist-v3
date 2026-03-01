@@ -1,0 +1,18 @@
+{
+  "Name": "selective_self_reference_judge",
+  "Title": "Selective Self-Reference for LLM-as-a-Judge: Using Self-Consistency to Gate Error Propagation",
+  "Short Hypothesis": "In solve-then-judge prompting for objective multiple-choice judging, selectively enabling self-reference only on high-agreement (unanimous) self-solves improves judge accuracy compared to always using self-reference (which propagates wrong self-answers), while keeping the benefits of self-reference on high-confidence cases.",
+  "Related Work": "Lin et al. (2025) 'Do Before You Judge' shows self-reference-guided evaluation improves pointwise correctness judging but warns about error propagation when self-answer is wrong. Xiong et al. (2026) 'PhyCritic' trains a multimodal solve-then-judge critic. Kadavath et al. (2022) and Wang et al. (2022) establish self-consistency as a confidence proxy. Tian et al. (2025) study overconfidence in LLM-as-a-Judge. No prior work gates self-reference in judge prompts using self-consistency as a confidence signal.",
+  "Experiment Plan": {
+    "model": "gemini-2.5-flash (replacing Qwen from original)",
+    "benchmarks": ["MMLU-Pro test set (1,400 items, 14 categories)"],
+    "conditions": ["(A) No-reference baseline", "(B) Always self-reference with k=3", "(C) Selective self-reference using unanimity gate"],
+    "notes": [
+      "Training-free -- pure prompting strategy, model-agnostic",
+      "Simple algorithm: self-solve k times, check unanimity, gate prompt",
+      "Existing results: +6.86pp over no-reference, +0.72pp over always-reference",
+      "Error propagation clearly demonstrated: -13.25pp when incorrect consensus",
+      "Extend to test with Gemini and additional benchmarks"
+    ]
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "Name": "self_anchored_temporal_filtering",
+  "Title": "Self-Anchored Temporal Filtering: LLM-Free Temporal Window Inference for Long-Memory Retrieval",
+  "Short Hypothesis": "Inferring a temporal window from the timestamp distribution of initial dense retrieval results (via weighted softmax accumulation over sessions) and promoting in-window items via stable partition will match or exceed GPT-4o-based time-range extraction for temporal queries -- requiring zero additional LLM calls.",
+  "Related Work": "LongMemEval (2024, 268 citations) is a well-established benchmark for long-term conversational memory. Current approaches use GPT-4o for time-range extraction (expensive, brittle). Zep (79 citations) proposes temporal knowledge graphs. Memory-T1 uses RL-based memory selection. LiCoMemory (8 citations) compresses conversation memory. No prior work infers temporal windows from retrieval score distributions for long-memory filtering.",
+  "Experiment Plan": {
+    "model": "Stella V5 1.5B (local, ~3GB) + gemini-2.5-flash (for LLM baseline comparison)",
+    "benchmarks": ["LongMemEval temporal reasoning subset (500 questions)"],
+    "conditions": ["Dense retrieval baseline", "GPT-4o/Gemini time-range extraction", "SATF (proposed)"],
+    "notes": [
+      "Training-free: Stella V5 for embeddings (~3GB on RTX 5080), SATF is pure NumPy",
+      "Gemini API used for the LLM baseline comparison (substituting GPT-4o)",
+      "Success: Recall@10 improvement >= 0.05 over dense baseline",
+      "Clean experimental design with ablations (confidence gating, hyperparameters)",
+      "Practical impact: eliminate per-query LLM calls for temporal filtering"
+    ]
+  }
+}

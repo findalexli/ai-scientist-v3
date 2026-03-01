@@ -1,0 +1,51 @@
+{
+  "Name": "repro_nanabanana2_tool_augmented_image_gen",
+  "Title": "Reproducing NanoBananba-2-Style Tool-Augmented Image Generation/Editing with Qwen-Image",
+  "Short Hypothesis": "If we (1) use a strong tool-using VLM/agent (e.g., Gemini with built-in web search / image search / external API calls) to enrich user prompts with up-to-date world knowledge and retrieved reference images, then (2) pass the enriched context into Qwen-Image hosted on FAL (for T2I or image-edit), we can reproduce a large fraction of NanoBananba-2-style 'world-aware' photorealistic generations and context-grounded edits compared to a no-tools baseline.",
+  "Related Work": "Recent product demos (e.g., 'Window Seat'-style experiences) combine an agent's tool use (web + live weather + location) with image generation to produce photorealistic, context-grounded imagery. This idea tests whether similar results can be reproduced by separating (A) tool orchestration / retrieval (Gemini) from (B) image synthesis via a hosted image model endpoint (Qwen-Image on FAL), and optionally replacing the orchestrator with a small local Qwen model.",
+  "Experiment Plan": {
+    "models": [
+      "Gemini API (orchestrator; tool use/web search/image search). Look up latest docs on how to get Gemini to do this reliably.",
+      "Gemini 'nano bananba 2' image model (baseline/reference, via Gemini API)",
+      "Qwen-Image hosted on FAL (fal.ai) for text-to-image and/or image editing (authenticated via FAL_KEY; allow FAL_API_KEY as a compatibility alias)",
+      "Optional: small local Qwen LLM for orchestration (if tool setup is feasible; image generation still via FAL)"
+    ],
+    "tasks": [
+      "Tool-augmented text-to-image: generate images from prompts requiring live external facts (weather, locations, events) after tool enrichment",
+      "Tool-augmented image editing: retrieve an appropriate reference image (e.g., a specific character/person) and edit it to match the enriched context"
+    ],
+    "prompt_suite": [
+      "World/location + live weather prompts (e.g., photorealistic window views inspired by a real place with current conditions)",
+      "Reference-image retrieval prompts (e.g., 'anime character in a specific pose' where the image model may not know the character without a retrieved image)"
+    ],
+    "conditions": [
+      "(A) No-tools baseline: direct prompt to image model",
+      "(B) Gemini-enriched context: Gemini performs tool calls, returns enriched context -> image model generates/edits",
+      "(C) Full agent loop (optional): orchestrator iterates tool calls + generation + refinement"
+    ],
+    "tools_and_dependencies": [
+      "Web search (Gemini built-in preferred)",
+      "Maybe code execution? if we could come up with such use cases, that only code need to solve this",
+      "Web image search / reverse image search (Gemini tool or external API key)",
+      "FAL API access for hosted Qwen-Image (requires FAL_KEY in environment/.env; optionally accept FAL_API_KEY as an alias)"
+    ],
+    "resources": [
+      "Gemini AI Studio / Gemini API access for orchestration and nano bananba 2 baseline calls",
+      "FAL account + FAL_KEY (or FAL_API_KEY alias) for hosted Qwen-Image inference (no local GPU required)"
+    ],
+    "evaluation": {
+      "human_vibe_check": "Manual inspection of generated/edited images for correctness and faithfulness to retrieved context.",
+      "vlm_judge": "Use a VLM judge prompt (e.g., gemini-3-1-pro-preview) to score whether the output image matches the expected grounded attributes from the enriched context.",
+      "suggested_metrics": [
+        "Grounded-attribute accuracy (does the image reflect retrieved facts like weather/location-specific cues?)",
+        "Edit faithfulness (does the edit preserve identity/reference while applying the requested changes?)",
+        "Hallucination rate (visual claims not supported by retrieved context)"
+      ]
+    },
+    "notes": [
+      "Start with Gemini as orchestrator to reduce tool-integration complexity (built-in web search/tool use).",
+      "Once the pipeline works with nano bananba 2 as the image model, swap in local Qwen-Image to isolate image-model dependence.",
+      "If results are strong, try replacing Gemini orchestration with a small local Qwen LLM + explicit tool wrappers."
+    ]
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "Name": "reink_chart_robustness",
+  "Title": "ReInk: OCR Re-Rendered Views for Robust Chart Question Answering under Visual Degradations",
+  "Short Hypothesis": "For corrupted chart images, providing a VLM with an auxiliary re-inked OCR view (OCR text re-rendered as a separate image at detected locations) improves chart QA accuracy beyond a compute-matched blank second image and a scrambled-text control that preserves box layout but destroys text semantics.",
+  "Related Work": "ChartQAPro (Masry et al., 2025) is a real-world chart QA benchmark with 1,948 questions where best closed model reaches 55.81% vs human 85.02%. CHART NOISe / Losing the Plot (Shin et al., 2025) shows sharp drops under blur: GPT-4o drops from 70% to 45% under major Gaussian blur. ViCrop (Zhang et al., 2023) uses attention-based cropping for small details. CropVLM (Carvalho et al., 2025) trains a crop-selection policy via RL. No prior work uses a spatially aligned OCR re-rendered canvas as an auxiliary image input for chart QA robustness.",
+  "Code References": [
+    {
+      "url": "https://github.com/vis-nlp/ChartQAPro",
+      "notes": "ChartQAPro benchmark and evaluation code"
+    }
+  ],
+  "Experiment Plan": {
+    "model": "gemini-2.5-flash or local Qwen2.5-VL-7B",
+    "benchmarks": ["ChartQAPro (1,948 questions, corrupted with defocus blur and pixelate at severity 4)"],
+    "conditions": ["(A) Corrupted + blank canvas", "(A-SC4) Self-consistency k=4 on A", "(B) Corrupted + scrambled-text canvas", "(C) Corrupted + correct ReInk canvas"],
+    "notes": [
+      "PERFECTLY suited for Gemini API -- just send 2 images + question per call",
+      "Also works with local Qwen2.5-VL-7B on RTX 5080 (~14GB VRAM)",
+      "EasyOCR for text extraction runs on CPU",
+      "Canvas rendering with PIL is trivial",
+      "Success: C exceeds max(A-SC4, B) by >=2pp on corrupted set"
+    ]
+  }
+}

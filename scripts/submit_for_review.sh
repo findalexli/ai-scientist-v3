@@ -63,10 +63,11 @@ if [ "$REVIEWER_MODE" = "subagent" ]; then
     # Detect which CLI to use: AGENT_TYPE env var, or auto-detect from available commands
     SUBAGENT_CLI="${AGENT_TYPE:-auto}"
     if [ "$SUBAGENT_CLI" = "auto" ]; then
-        if command -v gemini &>/dev/null || [ -f "$HOME/.nvm/versions/node/$(ls "$HOME/.nvm/versions/node/" 2>/dev/null | tail -1)/bin/gemini" ]; then
-            SUBAGENT_CLI="gemini-cli"
-        elif command -v claude &>/dev/null; then
+        # Check claude first (more common in this environment)
+        if command -v claude &>/dev/null || [ -f "$HOME/.local/bin/claude" ]; then
             SUBAGENT_CLI="claude-code"
+        elif command -v gemini &>/dev/null; then
+            SUBAGENT_CLI="gemini-cli"
         else
             echo "Error: REVIEWER_MODE=subagent requires claude or gemini CLI." >&2
             exit 1
@@ -103,7 +104,7 @@ REVIEW_EOF
         # Use --output-format json and extract .response to get clean output
         # without chain-of-thought / tool narration leaking into the review.
         GEMINI_RAW_JSON="$BASE_DIR/reviewer_gemini_raw.json"
-        if ! cat "$REVIEW_PROMPT_FILE" | gemini --yolo --output-format json \
+        if ! timeout 1200 cat "$REVIEW_PROMPT_FILE" | gemini --yolo --output-format json \
             > "$GEMINI_RAW_JSON" 2>"$BASE_DIR/reviewer_subagent_stderr.log"; then
             echo "Warning: Gemini reviewer subagent returned non-zero exit code." >&2
         fi
@@ -134,12 +135,13 @@ except Exception as e:
         fi
 
         # CLAUDECODE="" clears the nesting guard so claude can launch from within a running session.
-        # Note: --dangerously-skip-permissions fails as root (Docker containers).
-        # Omitting it lets the agent config handle permissions.
-        if ! CLAUDECODE="" claude -p \
+        # Add ~/.local/bin to PATH in case claude is installed there
+        export PATH="$HOME/.local/bin:$PATH"
+        cd "$BASE_DIR"
+        if ! CLAUDECODE="" timeout 1200 claude -p \
             --agent reviewer \
             --output-format text \
-            "Review the research submission. The paper is at $TEX_PATH. Inspect the full workspace: experiment_codebase/, figures/, literature/, and latex/. Follow your review procedure and produce your review." \
+            "Review the research submission. The paper is at latex/template.tex (compiled PDF at latex/template.pdf). Inspect the full workspace: experiment_codebase/, figures/, literature/, and latex/. Follow your review procedure and produce your review." \
             > "$RAW_RESPONSE" 2>"$BASE_DIR/reviewer_subagent_stderr.log"; then
             echo "Warning: Claude reviewer subagent returned non-zero exit code." >&2
         fi

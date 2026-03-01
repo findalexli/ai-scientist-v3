@@ -1,0 +1,17 @@
+{
+  "Name": "selective_delex_json",
+  "Title": "Selective DeLex-JSON: Schema-Level Defense Against Constrained-Decoding Jailbreak Attacks",
+  "Short Hypothesis": "Selectively replacing suspicious forced literals in JSON schemas with opaque placeholders (while preserving schema structure) will defend against EnumAttack-style constrained decoding jailbreaks with near-zero attack success rate and minimal benign schema false positive rate.",
+  "Related Work": "CDA (ArXiv 2503.24191, 8 citations) identifies the control-plane attack surface in JSON Schema constrained decoding. EnumAttack embeds harmful prompts as forced enum values, bypassing safety alignment at 22% ASR. DictAttack achieves 75.8% ASR. StruQ (2024) uses reserved tokens plus structured instruction tuning for prompt injection defense. SecAlign (2024) uses preference optimization for robustness. Spotlighting (2024) proposes delimiting/encoding transformations. No prior work proposes schema-level preprocessing defense specifically targeting constrained decoding attacks.",
+  "Experiment Plan": {
+    "model": "gemini-2.5-flash + local Qwen2.5-7B/Llama-3.1-8B on RTX 5080",
+    "benchmarks": ["HarmBench (100 prompts)", "StrongREJECT (311 prompts)", "JSONSchemaBench", "IFEval"],
+    "notes": [
+      "Defense is pure Python regex preprocessing -- zero GPU needed",
+      "Test attack/defense on Gemini's structured output API directly",
+      "Existing results: 0% ASR on HarmBench (from 22%), 1.1% FPR",
+      "Extend to test Gemini, GPT-4o, Claude for cross-model generalization",
+      "Room for DictAttack defense extension"
+    ]
+  }
+}
