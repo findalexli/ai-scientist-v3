@@ -971,6 +971,16 @@ body::after {
           <div class="panel-title">Activity Breakdown</div>
           <div class="donut-container"><canvas id="activity-chart"></canvas></div>
         </div>
+
+        <div class="card panel" id="feedback-panel">
+          <div class="panel-title">Send Feedback to Agent</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Written to <code>/logs/agent/feedback.txt</code> — the agent checks this at natural pause points.</div>
+          <textarea id="feedback-text" rows="4" style="width:100%;box-sizing:border-box;background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:12px;font-family:inherit;resize:vertical;" placeholder="e.g. Focus on dataset X, add an ablation for Y..."></textarea>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+            <button class="pdf-btn" id="feedback-submit-btn" onclick="submitFeedback()">Submit</button>
+            <span id="feedback-status" style="font-size:11px;color:var(--muted);"></span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -1832,6 +1842,37 @@ function startSSE() {
       }
     } catch (_) {}
   }, 12000);
+}
+
+async function submitFeedback() {
+  const textarea = document.getElementById('feedback-text');
+  const status = document.getElementById('feedback-status');
+  const btn = document.getElementById('feedback-submit-btn');
+  const text = textarea.value.trim();
+  if (!text) { status.textContent = 'Please enter some feedback.'; return; }
+  btn.disabled = true;
+  status.textContent = 'Sending...';
+  try {
+    const resp = await fetch(`/api/jobs/${JOB_ID}/feedback`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text}),
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+      status.style.color = 'var(--green, #4caf50)';
+      status.textContent = 'Delivered — agent will check at next pause point.';
+      textarea.value = '';
+    } else {
+      status.style.color = 'var(--red, #f44336)';
+      status.textContent = data.error || 'Failed to send feedback.';
+    }
+  } catch (e) {
+    status.style.color = 'var(--red, #f44336)';
+    status.textContent = 'Network error.';
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 document.addEventListener('DOMContentLoaded', () => {

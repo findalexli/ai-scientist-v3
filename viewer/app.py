@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import Body, FastAPI, Request
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from sse_starlette.sse import EventSourceResponse
@@ -1199,6 +1199,34 @@ async def api_trajectory(job_id: str, regenerate: bool = False):
         return JSONResponse(mask_secrets(data))
     except (json.JSONDecodeError, OSError) as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/jobs/{job_id}/feedback")
+async def api_submit_feedback(job_id: str, text: str = Body(..., embed=True)):
+    """Append user feedback to the job's feedback file, visible to the agent at /logs/agent/feedback.txt."""
+    if SOURCE_MODE == "gitlab":
+        return JSONResponse({"error": "Feedback not supported in GitLab mode"}, status_code=400)
+    if not text or not text.strip():
+        return JSONResponse({"error": "Feedback text is required"}, status_code=400)
+
+    job_dir = os.path.join(JOBS_DIR, job_id)
+    if not os.path.isdir(job_dir):
+        return JSONResponse({"error": "Job not found"}, status_code=404)
+
+    agent_dir = find_agent_dir(job_dir)
+    if not agent_dir:
+        return JSONResponse({"error": "Agent directory not found — job may not have started yet"}, status_code=404)
+
+    feedback_path = os.path.join(agent_dir, "feedback.txt")
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    entry = f"[{timestamp}]\n{text.strip()}\n\n"
+    try:
+        with open(feedback_path, "a") as f:
+            f.write(entry)
+    except OSError as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+    return JSONResponse({"status": "ok", "path": feedback_path})
 
 
 # ---------------------------------------------------------------------------

@@ -71,4 +71,11 @@ This ensures partial work is preserved if the run times out.
 
 > **Warning:** Only `/logs/agent/` and `/logs/verifier/` are mounted to the host. Do NOT write to `/logs/artifacts/` or any other `/logs/` subpath — they are ephemeral and will be lost.
 
+## User Feedback
+
+The user overseeing this job can leave real-time guidance in `/logs/agent/feedback.txt`.
+Check this file at the start of your run and again at natural pause points (after
+literature review, after experiments, after getting a review). If the file exists and
+has content, incorporate the guidance into your work before continuing.
+
 Follow the research process defined in your project instructions.
