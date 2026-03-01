@@ -1159,7 +1159,7 @@ async def api_trajectory(job_id: str, regenerate: bool = False):
         project_id, branch = gl
         traj = GITLAB_CLIENT.get_file_json(project_id, branch, "agent_trace/trajectory.json")
         if traj:
-            return JSONResponse(traj)
+            return JSONResponse(traj, headers=_CDN_CACHE_24H)
 
     # Fallback to local disk (local mode only).
     if SOURCE_MODE == "gitlab":
