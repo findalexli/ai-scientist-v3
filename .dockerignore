@@ -1,0 +1,16 @@
+jobs/
+.venv/
+.env
+.git/
+.claude/
+viewer/frontend/node_modules/
+viewer/frontend/build/
+viewer/templates/
+submissions/
+experiment_codebase/
+figures/
+latex/
+literature/
+blank_icbinb_latex/
+__pycache__/
+*.pyc
