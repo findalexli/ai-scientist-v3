@@ -105,7 +105,7 @@ fi
 section "5. Idea JSON files are valid"
 # ---------------------------------------------------------------------------
 
-for f in "$REPO_ROOT"/idea*.json; do
+for f in "$REPO_ROOT"/ideas/idea*.json "$REPO_ROOT"/idea*.json; do
     [ -f "$f" ] || continue
     BASENAME=$(basename "$f")
     if python3 -c "import json; json.load(open('$f'))" 2>/dev/null; then
@@ -119,7 +119,9 @@ done
 section "6. idea_videoqa_with_tool.json has Code References"
 # ---------------------------------------------------------------------------
 
-IDEA_VQA="$REPO_ROOT/idea_videoqa_with_tool.json"
+IDEA_VQA="$REPO_ROOT/ideas/idea_videoqa_with_tool.json"
+# Fallback to old location
+[ -f "$IDEA_VQA" ] || IDEA_VQA="$REPO_ROOT/idea_videoqa_with_tool.json"
 
 if [ -f "$IDEA_VQA" ]; then
     HAS_CODE_REFS=$(python3 -c "
