@@ -280,6 +280,7 @@ No hardcoded stages. No tree data structure. No Python orchestration. The agent 
 - `GEMINI_API_KEY` or `GOOGLE_API_KEY` — Required for Gemini CLI agent
 - `OPENAI_API_KEY` or `CODEX_API_KEY` (optional) — Enables Codex CLI in ensemble review mode
 - `REVIEWER_MODE` (optional) — `subagent` (default), `ensemble`, or `api`
+- `REVIEWER_TIMEOUT` (optional) — Per-reviewer timeout in seconds (default: `1800` = 30 min)
 - `CODEX_MODEL` (optional) — Override Codex CLI model in ensemble mode
 - `GEMINI_MODEL` (optional) — Override Gemini CLI model in ensemble mode (default: `auto`)
 - `S2_API_KEY` (optional) — Semantic Scholar API key for higher rate limits

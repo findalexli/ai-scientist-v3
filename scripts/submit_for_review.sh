@@ -55,6 +55,7 @@ EXTRACT_SCRIPT="$BASE_DIR/.claude/skills/review-paper/scripts/extract_and_genera
 mkdir -p "$SUBMISSIONS_DIR"
 
 REVIEWER_MODE="${REVIEWER_MODE:-subagent}"
+REVIEWER_TIMEOUT="${REVIEWER_TIMEOUT:-1800}"  # Per-reviewer timeout in seconds (default: 30 min)
 
 # =============================================================================
 # Helper functions (used by both subagent and ensemble modes)
@@ -157,7 +158,7 @@ run_single_reviewer() {
     case "$cli_type" in
         claude)
             # CLAUDECODE="" clears nesting guard
-            CLAUDECODE="" run_with_timeout 1200 claude -p \
+            CLAUDECODE="" run_with_timeout "$REVIEWER_TIMEOUT" claude -p \
                 --agent "$agent_name" \
                 --output-format text \
                 "$task_prompt" \
@@ -184,13 +185,13 @@ run_single_reviewer() {
             fi
 
             if [ -n "${CODEX_MODEL:-}" ]; then
-                run_with_timeout 1200 codex exec \
+                run_with_timeout "$REVIEWER_TIMEOUT" codex exec \
                     --model "$CODEX_MODEL" \
                     $codex_sandbox_flag \
                     --output-last-message "$output_file" \
                     - < "$prompt_file" 2>"$stderr_file" || true
             else
-                run_with_timeout 1200 codex exec \
+                run_with_timeout "$REVIEWER_TIMEOUT" codex exec \
                     $codex_sandbox_flag \
                     --output-last-message "$output_file" \
                     - < "$prompt_file" 2>"$stderr_file" || true
@@ -204,7 +205,7 @@ run_single_reviewer() {
             strip_frontmatter "$agent_prompt_file" > "$prompt_file"
             printf '\n\n%s\n' "$task_prompt" >> "$prompt_file"
 
-            run_with_timeout 1200 gemini \
+            run_with_timeout "$REVIEWER_TIMEOUT" gemini \
                 --approval-mode=yolo \
                 --output-format json \
                 --model "${GEMINI_MODEL:-auto}" \
@@ -425,7 +426,7 @@ REVIEW_EOF
         # Use --output-format json and extract .response to get clean output
         # without chain-of-thought / tool narration leaking into the review.
         GEMINI_RAW_JSON="$BASE_DIR/reviewer_gemini_raw.json"
-        if ! run_with_timeout 1200 cat "$REVIEW_PROMPT_FILE" | gemini --yolo --output-format json \
+        if ! run_with_timeout "$REVIEWER_TIMEOUT" cat "$REVIEW_PROMPT_FILE" | gemini --yolo --output-format json \
             > "$GEMINI_RAW_JSON" 2>"$BASE_DIR/reviewer_subagent_stderr.log"; then
             echo "Warning: Gemini reviewer subagent returned non-zero exit code." >&2
         fi
@@ -457,7 +458,7 @@ except Exception as e:
 
         # CLAUDECODE="" clears the nesting guard so claude can launch from within a running session.
         cd "$BASE_DIR"
-        if ! CLAUDECODE="" run_with_timeout 1200 claude -p \
+        if ! CLAUDECODE="" run_with_timeout "$REVIEWER_TIMEOUT" claude -p \
             --agent reviewer \
             --output-format text \
             "Review the research submission. The paper is at latex/template.tex (compiled PDF at latex/template.pdf). Inspect the full workspace: experiment_codebase/, figures/, literature/, and latex/. Follow your review procedure and produce your review." \
