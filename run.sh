@@ -271,12 +271,17 @@ if branches:
 else:
     print('(none — this is the first run)')
 ")
-        # Append GitLab vars to the container's .env
+        # Append GitLab vars to the container's .env (used by local Docker via docker-compose)
         {
             echo ""
             echo "GITLAB_REPO_URL=$GITLAB_REPO_URL"
             echo "GITLAB_BRANCH=$GITLAB_BRANCH"
         } >> "$ENV_DIR/.env"
+        # Also write to scripts/.gitlab_env (baked into image, works on Modal where .env isn't mounted)
+        {
+            echo "GITLAB_REPO_URL=$GITLAB_REPO_URL"
+            echo "GITLAB_BRANCH=$GITLAB_BRANCH"
+        } > "$SCRIPT_DIR/scripts/.gitlab_env"
         echo "GitLab repo: $GITLAB_WEB_URL (branch: $GITLAB_BRANCH)"
     else
         echo "Warning: GitLab setup failed (continuing without git push)" >&2

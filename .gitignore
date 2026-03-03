@@ -50,3 +50,4 @@ review.json
 
 # Local experiment scratch (not part of the automated pipeline)
 interactive_run/
+scripts/.gitlab_env

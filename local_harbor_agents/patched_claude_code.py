@@ -101,7 +101,11 @@ sync_artifacts() {{
 
 trap 'sync_artifacts' EXIT TERM INT
 
-# --- Git remote + branch setup (if GITLAB_REPO_URL is set) ---
+# --- Git remote + branch setup ---
+# Source GitLab vars from baked-in file if not in env (Modal doesn't pass .env)
+if [ -z "${{GITLAB_REPO_URL:-}}" ] && [ -f /app/scripts/.gitlab_env ]; then
+    set -a; source /app/scripts/.gitlab_env; set +a
+fi
 if [ -n "${{GITLAB_REPO_URL:-}}" ]; then
     cd /app
     git remote add origin "$GITLAB_REPO_URL" 2>/dev/null || git remote set-url origin "$GITLAB_REPO_URL"
