@@ -205,12 +205,37 @@ run_single_reviewer() {
             strip_frontmatter "$agent_prompt_file" > "$prompt_file"
             printf '\n\n%s\n' "$task_prompt" >> "$prompt_file"
 
-            run_with_timeout "$REVIEWER_TIMEOUT" gemini \
-                --approval-mode=yolo \
-                --output-format json \
-                --model "${GEMINI_MODEL:-auto}" \
-                < "$prompt_file" \
-                > "$raw_json" 2>"$stderr_file" || true
+            # Retry up to 3 times on Gemini API failures (503, timeout)
+            local gemini_attempt=0
+            local gemini_max_retries=3
+            while [ $gemini_attempt -lt $gemini_max_retries ]; do
+                gemini_attempt=$((gemini_attempt + 1))
+                > "$raw_json"  # clear previous attempt
+
+                run_with_timeout "$REVIEWER_TIMEOUT" gemini \
+                    --approval-mode=yolo \
+                    --output-format json \
+                    --model "${GEMINI_MODEL:-auto}" \
+                    < "$prompt_file" \
+                    > "$raw_json" 2>>"$stderr_file" || true
+
+                # Check if we got a valid response
+                if [ -s "$raw_json" ] && python3 -c "
+import json, sys
+with open(sys.argv[1]) as f:
+    data = json.load(f)
+resp = data.get('response', '')
+if data.get('error') or len(resp) < 50:
+    sys.exit(1)
+" "$raw_json" 2>/dev/null; then
+                    break  # success
+                fi
+
+                if [ $gemini_attempt -lt $gemini_max_retries ]; then
+                    echo "  Gemini attempt $gemini_attempt failed, retrying in 30s..." >&2
+                    sleep 30
+                fi
+            done
 
             # Parse JSON response
             python3 -c "
