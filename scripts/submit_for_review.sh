@@ -174,11 +174,12 @@ run_single_reviewer() {
                 export CODEX_API_KEY="$OPENAI_API_KEY"
             fi
 
-            # Use --dangerously-bypass-approvals-and-sandbox inside containers
+            # Use --dangerously-bypass-approvals-and-sandbox inside containers/sandboxes
             # to avoid Landlock double-sandboxing (container already provides isolation).
-            # Fall back to --full-auto if not in a container.
+            # Detects: Docker (/.dockerenv), LXC/containerd (cgroup), Modal (cgroup /ta-*).
+            # Fall back to --full-auto on bare metal.
             local codex_sandbox_flag="--full-auto"
-            if [ -f "/.dockerenv" ] || grep -q 'docker\|lxc\|containerd' /proc/1/cgroup 2>/dev/null; then
+            if [ -f "/.dockerenv" ] || grep -qE 'docker|lxc|containerd|/ta-' /proc/1/cgroup 2>/dev/null; then
                 codex_sandbox_flag="--dangerously-bypass-approvals-and-sandbox"
             fi
 
