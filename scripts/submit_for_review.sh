@@ -109,7 +109,10 @@ detect_available_clis() {
         clis+=("codex")
     fi
 
-    if { [ -n "${GEMINI_API_KEY:-}" ] || [ -n "${GOOGLE_API_KEY:-}" ]; } && command -v gemini &>/dev/null; then
+    # Gemini disabled by default — unreliable HeadersTimeout/503 errors
+    # (github.com/google-gemini/gemini-cli/issues/18030, #14148, #8475).
+    # Re-enable with ENABLE_GEMINI_REVIEWER=1 if the upstream fixes land.
+    if [ "${ENABLE_GEMINI_REVIEWER:-0}" = "1" ] && { [ -n "${GEMINI_API_KEY:-}" ] || [ -n "${GOOGLE_API_KEY:-}" ]; } && command -v gemini &>/dev/null; then
         clis+=("gemini")
     fi
 
