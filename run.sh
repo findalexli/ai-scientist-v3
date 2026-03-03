@@ -381,7 +381,7 @@ JOB_NAME="${IDEA_NAME}__${TIMESTAMP}"
 # and setup timeouts.  By writing the desired timeout directly into task.toml
 # and keeping the multiplier at 1.0, the setup timeout stays at its default
 # (360s) — enough for Docker build + agent install.
-sed -i "s/^timeout_sec = .*/timeout_sec = $TIMEOUT/" "$TASK_DIR/task.toml"
+sed -i '' "s/^timeout_sec = .*/timeout_sec = $TIMEOUT/" "$TASK_DIR/task.toml"
 
 HARBOR_ARGS=(
     harbor run

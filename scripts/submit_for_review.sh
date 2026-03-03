@@ -50,7 +50,7 @@ EXTRACT_SCRIPT="$BASE_DIR/.claude/skills/review-paper/scripts/extract_and_genera
 
 mkdir -p "$SUBMISSIONS_DIR"
 
-REVIEWER_MODE="${REVIEWER_MODE:-api}"
+REVIEWER_MODE="${REVIEWER_MODE:-subagent}"
 
 # --- Step 1: Generate review ---
 echo "=== Submitting paper for review ==="
