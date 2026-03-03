@@ -174,15 +174,23 @@ run_single_reviewer() {
                 export CODEX_API_KEY="$OPENAI_API_KEY"
             fi
 
+            # Use --dangerously-bypass-approvals-and-sandbox inside containers
+            # to avoid Landlock double-sandboxing (container already provides isolation).
+            # Fall back to --full-auto if not in a container.
+            local codex_sandbox_flag="--full-auto"
+            if [ -f "/.dockerenv" ] || grep -q 'docker\|lxc\|containerd' /proc/1/cgroup 2>/dev/null; then
+                codex_sandbox_flag="--dangerously-bypass-approvals-and-sandbox"
+            fi
+
             if [ -n "${CODEX_MODEL:-}" ]; then
                 run_with_timeout 1200 codex exec \
                     --model "$CODEX_MODEL" \
-                    --full-auto \
+                    $codex_sandbox_flag \
                     --output-last-message "$output_file" \
                     - < "$prompt_file" 2>"$stderr_file" || true
             else
                 run_with_timeout 1200 codex exec \
-                    --full-auto \
+                    $codex_sandbox_flag \
                     --output-last-message "$output_file" \
                     - < "$prompt_file" 2>"$stderr_file" || true
             fi
