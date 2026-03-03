@@ -1,0 +1,24 @@
+[project]
+name = "ai-scientist-v3"
+version = "0.1.0"
+description = "Autonomous AI research agent"
+requires-python = ">=3.12"
+dependencies = [
+    # Viewer
+    "fastapi",
+    "uvicorn",
+    "sse-starlette",
+    "ijson",
+    # Harbor (latest from git — provides ATIF trajectory generation + agent orchestration)
+    "harbor @ git+https://github.com/harbor-framework/harbor.git",
+    # Modal (optional cloud execution)
+    "modal",
+    # GitLab integration
+    "python-gitlab",
+    "requests",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]

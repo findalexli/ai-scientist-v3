@@ -22,6 +22,13 @@ API keys (via environment variables, if configured):
 - `OPENALEX_API_KEY` — OpenAlex (PDF downloads, expanded searc for papers that Arxiv could not directly download)
 - `HF_TOKEN` — HuggingFace (gated models/datasets)
 - `KAGGLE_USERNAME` / `KAGGLE_KEY` — Kaggle API
+- `OPENAI_API_KEY` — Codex CLI (ensemble reviewer mode)
+- `GEMINI_API_KEY` / `GOOGLE_API_KEY` — Gemini CLI (ensemble reviewer mode)
+
+Reviewer configuration:
+- `REVIEWER_MODE` — `subagent` (default, single reviewer), `ensemble` (3 parallel reviewers), or `api` (external API)
+- `CODEX_MODEL` — Model for Codex CLI in ensemble mode (default: Codex CLI's own default)
+- `GEMINI_MODEL` — Model for Gemini CLI in ensemble mode (default: `auto`)
 
 ## Research Process
 
@@ -35,7 +42,12 @@ API keys (via environment variables, if configured):
    bash scripts/submit_for_review.sh latex/template.tex
    ```
    This generates a review, saves the response, and creates a versioned snapshot in `submissions/v{N}_{timestamp}/`. Use `timeout: 600000` (10 minutes) for the Bash tool call.
-7. **Read Reviewer Feedback** — Read the reviewer's feedback from `submissions/v{N}_{timestamp}/reviewer_communications/response.md` (path printed by the script). The file starts with a `## Review` section containing the review.
+   For multi-perspective feedback, use ensemble mode (runs 3 diversified reviewers in parallel):
+   ```bash
+   REVIEWER_MODE=ensemble bash scripts/submit_for_review.sh latex/template.tex
+   ```
+   Ensemble mode produces 3 reviews: comprehensive (reviewer.md), idea/literature (idea-reviewer.md), and code quality (code-reviewer.md). Each can run on a different CLI backend (Claude, Codex, Gemini) if the corresponding API keys are set.
+7. **Read Reviewer Feedback** — Read the reviewer's feedback from `submissions/v{N}_{timestamp}/reviewer_communications/response.md` (path printed by the script). In subagent mode, the file starts with a `## Review` section. In ensemble mode, it contains three `## Review (...)` sections — one per reviewer.
 8. **Continue Iterate, autonomously** — Address the reviewer's questions and weaknesses:
    - Run additional experiments if needed
    - Search for additional literature with `/search-papers` to contextualize new results or address gaps
@@ -147,7 +159,6 @@ Maintain `experiment_codebase/README.md` as a running log throughout the researc
 
 ### Quality Standards
 - Papers must compile without errors
-- 4-page limit for main text (excluding references and appendix)
 - All figures referenced in text must exist
 - Citations must have valid BibTeX entries
 - Results must be real — never hallucinate numbers

@@ -45,7 +45,19 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)  # gzip responses >1KB
 JOBS_DIR = "./jobs"
 TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "templates")
 REPO_ROOT = os.path.dirname(os.path.dirname(__file__))
-HARBOR_PYTHON = "/home/alex/.local/share/uv/tools/harbor/bin/python3"
+# Resolve Python with harbor available: prefer the project venv (.venv/bin/python3),
+# fall back to uv tool install location, then system python as last resort.
+def _find_harbor_python() -> str:
+    candidates = [
+        os.path.join(os.path.dirname(os.path.dirname(__file__)), ".venv", "bin", "python3"),  # project venv
+        os.path.expanduser("~/.local/share/uv/tools/harbor/bin/python3"),  # uv tool install
+    ]
+    for p in candidates:
+        if os.path.isfile(p):
+            return p
+    return sys.executable  # fallback: current python (may lack harbor)
+
+HARBOR_PYTHON = _find_harbor_python()
 GENERATE_ATIF_SCRIPT = os.path.join(os.path.dirname(os.path.dirname(__file__)), "scripts", "backfill_trajectory.py")
 # Data source mode: "local" (disk only), "gitlab" (GitLab API only).
 SOURCE_MODE = "local"

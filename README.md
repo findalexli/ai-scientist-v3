@@ -68,7 +68,7 @@ Both agents use the same Harbor infrastructure (Dockerfiles, instruction templat
 - Claude Code: `ANTHROPIC_API_KEY`
 - Gemini CLI: `GEMINI_API_KEY` or `GOOGLE_API_KEY` (or GCP service account via `GOOGLE_APPLICATION_CREDENTIALS`)
 
-**Self-review:** Each agent reviews its own work. When `REVIEWER_MODE=subagent`, Claude Code uses `claude -p --agent reviewer` and Gemini CLI uses `gemini --yolo --output-format json` with the same reviewer prompt. Both produce structured reviews following the NeurIPS format in `.claude/agents/reviewer.md`.
+**Self-review:** Each agent reviews its own work via `scripts/submit_for_review.sh`. See [Review Modes](#review-modes) below for the three available review strategies.
 
 By default, `run.sh` uses a local patched agent (via `--agent-import-path`) to
 improve reliability without modifying Harbor source code:
@@ -86,6 +86,10 @@ ai_scientist_v3/
 ├── ideas/                                   # Research idea JSONs (input to run.sh)
 ├── .claude/
 │   ├── CLAUDE.md                           # Project context + conventions
+│   ├── agents/
+│   │   ├── reviewer.md                    # Comprehensive reviewer (NeurIPS format)
+│   │   ├── idea-reviewer.md               # Idea & literature reviewer (novelty, SOTA)
+│   │   └── code-reviewer.md               # Code quality reviewer (reproducibility, correctness)
 │   └── skills/
 │       └── search-papers/                  # /search-papers — 3-API stack (S2, OpenReview, CrossRef)
 │           ├── SKILL.md
@@ -94,8 +98,8 @@ ai_scientist_v3/
 │   ├── instruction.md.template             # Research prompt ({{IDEA_CONTENT}} placeholder)
 │   ├── task.toml                           # Container config (CPU, memory, timeout)
 │   ├── environment/
-│   │   ├── Dockerfile.cpu                  # python:3.12-slim + LaTeX + scikit-learn + Claude Code CLI
-│   │   └── Dockerfile.gpu                  # pytorch + CUDA + LaTeX + scikit-learn + Claude Code CLI
+│   │   ├── Dockerfile.cpu                  # python:3.12-slim + LaTeX + scikit-learn + Claude/Codex/Gemini CLIs
+│   │   └── Dockerfile.gpu                  # pytorch + CUDA + LaTeX + scikit-learn + Claude/Codex/Gemini CLIs
 │   └── tests/test.sh                       # Verifier (checks artifacts, produces reward)
 ├── scripts/
 │   ├── compile_latex.sh                   # pdflatex + bibtex + chktex
@@ -137,6 +141,64 @@ After reviewing a run's output, you can send feedback to steer the next run:
 ```
 
 The `--feedback` text is injected into the instruction as a "Feedback from Previous Run" section. The agent sees it at the start of the session and prioritizes addressing it. Combine with `--resume-from` so the agent builds on existing artifacts rather than starting over.
+
+### Review Modes
+
+`scripts/submit_for_review.sh` supports three review strategies, controlled by `REVIEWER_MODE`:
+
+| Mode | Env Var | What it does |
+|------|---------|-------------|
+| **Subagent** (default) | `REVIEWER_MODE=subagent` | Single comprehensive reviewer using the driving agent's CLI |
+| **Ensemble** | `REVIEWER_MODE=ensemble` | 3 diversified reviewers in parallel, each with a different perspective |
+| **API** | `REVIEWER_MODE=api` | External reviewer API (legacy) |
+
+#### Subagent Mode
+
+The default. Launches one reviewer using whichever CLI is available (Claude Code or Gemini CLI). Produces a single structured review following NeurIPS format defined in `.claude/agents/reviewer.md`.
+
+```bash
+bash scripts/submit_for_review.sh latex/template.tex          # auto-detects CLI
+AGENT_TYPE=gemini-cli bash scripts/submit_for_review.sh latex/template.tex  # force Gemini
+```
+
+#### Ensemble Mode
+
+Launches **3 specialized reviewers in parallel**, each with a different focus:
+
+| Reviewer | Agent File | Focus |
+|----------|-----------|-------|
+| Comprehensive | `.claude/agents/reviewer.md` | Full NeurIPS-style review: paper, code, figures, literature, process compliance |
+| Idea & Literature | `.claude/agents/idea-reviewer.md` | Novelty assessment, impact analysis, SOTA positioning, missing citations |
+| Code Quality | `.claude/agents/code-reviewer.md` | Reproducibility, scientific correctness, code organization, results integrity |
+
+Each reviewer is randomly assigned to an available CLI backend:
+
+| CLI | Available when | Auth |
+|-----|---------------|------|
+| Claude | Always (installed in container) | `ANTHROPIC_API_KEY` |
+| Codex | `OPENAI_API_KEY` or `CODEX_API_KEY` set + `codex` binary present | `CODEX_API_KEY` (auto-bridged from `OPENAI_API_KEY`) |
+| Gemini | `GEMINI_API_KEY` or `GOOGLE_API_KEY` set + `gemini` binary present | `GEMINI_API_KEY` or `GOOGLE_API_KEY` |
+
+If only one or two CLIs are available, the remaining slots are filled with Claude. The assignment is shuffled so no reviewer always gets the same CLI.
+
+```bash
+REVIEWER_MODE=ensemble bash scripts/submit_for_review.sh latex/template.tex
+```
+
+The output `response.md` contains three `## Review (...)` sections, one per reviewer, with the CLI backend noted. Individual review files and stderr logs are preserved in the version snapshot:
+
+```
+submissions/v{N}_{timestamp}/reviewer_communications/
+├── response.md                  # All 3 reviews concatenated
+├── reviewer_response_1.txt      # Raw output from Reviewer 1
+├── reviewer_response_2.txt      # Raw output from Reviewer 2
+├── reviewer_response_3.txt      # Raw output from Reviewer 3
+├── ensemble_assignment.json     # {"reviewer": "claude", "idea-reviewer": "codex", ...}
+├── reviewer_stderr_{1,2,3}.log  # Per-reviewer stderr
+└── trace/                       # Claude session files (if any)
+```
+
+**Error handling:** If a reviewer fails, its section says `[Review not available]` with the error log. The submission proceeds as long as at least 1 of 3 reviewers succeeds.
 
 ### GPU Support
 
@@ -207,7 +269,7 @@ The agent receives a research idea and autonomously:
 5. Runs ablation studies
 6. Generates publication-quality plots
 7. Writes a complete paper using the LaTeX template
-8. Submits for external review via `scripts/submit_for_review.sh` (calls reviewer API, creates versioned snapshot)
+8. Submits for review via `scripts/submit_for_review.sh` — single subagent, 3-reviewer ensemble, or external API (creates versioned snapshot)
 9. Reads reviewer questions, iterates on experiments and paper, resubmits
 
 No hardcoded stages. No tree data structure. No Python orchestration. The agent decides what to do and when, using its own scientific judgment.
@@ -216,6 +278,10 @@ No hardcoded stages. No tree data structure. No Python orchestration. The agent 
 
 - `ANTHROPIC_API_KEY` — Required for Claude Code agent
 - `GEMINI_API_KEY` or `GOOGLE_API_KEY` — Required for Gemini CLI agent
+- `OPENAI_API_KEY` or `CODEX_API_KEY` (optional) — Enables Codex CLI in ensemble review mode
+- `REVIEWER_MODE` (optional) — `subagent` (default), `ensemble`, or `api`
+- `CODEX_MODEL` (optional) — Override Codex CLI model in ensemble mode
+- `GEMINI_MODEL` (optional) — Override Gemini CLI model in ensemble mode (default: `auto`)
 - `S2_API_KEY` (optional) — Semantic Scholar API key for higher rate limits
 - `GITLAB_KEY` (optional) — GitLab personal access token for cross-run agent memory
 - `pdflatex` — Required for paper compilation (MacTeX: `/Library/TeX/texbin/pdflatex`)

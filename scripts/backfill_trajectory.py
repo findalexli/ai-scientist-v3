@@ -6,8 +6,8 @@ populate_context_post_run.  This script exists only to retroactively
 create trajectories for jobs produced before that upstream feature
 landed (harbor commit 5a3a6db, 2026-02-12).
 
-Usage (requires Harbor's Python, not the project venv):
-    /home/alex/.local/share/uv/tools/harbor/bin/python3 scripts/backfill_trajectory.py --job-dir jobs/<job-id>
+Usage (requires harbor package installed):
+    uv run python scripts/backfill_trajectory.py --job-dir jobs/<job-id>
 """
 
 import argparse

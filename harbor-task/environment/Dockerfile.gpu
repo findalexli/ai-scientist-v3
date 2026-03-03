@@ -19,7 +19,7 @@ RUN rm -f /usr/lib/python3.12/EXTERNALLY-MANAGED
 # independent of which main agent runtime — Gemini, Codex, etc. — is driving)
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
-    npm install -g @anthropic-ai/claude-code && \
+    npm install -g @anthropic-ai/claude-code @openai/codex @google/gemini-cli 2>/dev/null; \
     rm -rf /var/lib/apt/lists/*
 
 # Install uv for fast, reproducible Python package management
