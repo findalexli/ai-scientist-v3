@@ -66,7 +66,7 @@ const columns: ColumnDef<JobSummary>[] = [
       <SortableHeader column={column}>Job ID</SortableHeader>
     ),
     cell: ({ row }) => (
-      <span className="font-mono text-xs truncate max-w-[280px] block">
+      <span className="font-mono text-xs truncate max-w-[480px] block" title={row.original.id}>
         {row.original.id}
       </span>
     ),

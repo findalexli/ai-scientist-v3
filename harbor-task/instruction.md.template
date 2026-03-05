@@ -8,8 +8,10 @@ publication-ready research paper.
 {{IDEA_CONTENT}}
 {{RESUME_CONTEXT}}
 
-## Note: Your idea maynot always be the best idea right out of the gate, treat it as a seed idea to get started, 
-navigate and steer towards impactful, novel work as you experiment, literature review, and interact with the reviewer
+## Note: Your idea maynot always be the best idea right out of the gate, treat it as a seed idea to get started,
+navigate and steer towards impactful, novel work as you experiment, literature review, and interact with the reviewer.
+However, the "What NOT To Do" and "HOW TO RUN EXPERIMENTS" sections in the idea are NON-NEGOTIABLE constraints —
+do not deviate from them even if you think a different approach would be faster or easier.
 ## Persistent Data Directory
 
 `/data` is a persistent directory mounted from the host. Use it to cache downloaded
