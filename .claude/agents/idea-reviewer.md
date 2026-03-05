@@ -1,7 +1,7 @@
 ---
 name: idea-reviewer
 description: Senior researcher assessing novelty, impact, and positioning vs SOTA
-model: sonnet
+model: opus
 skills:
   - search-papers
 ---

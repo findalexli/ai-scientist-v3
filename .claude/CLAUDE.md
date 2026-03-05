@@ -28,7 +28,7 @@ API keys (via environment variables, if configured):
 Reviewer configuration:
 - `REVIEWER_MODE` — `subagent` (default, single reviewer), `ensemble` (3 parallel reviewers), or `api` (external API)
 - `REVIEWER_TIMEOUT` — Per-reviewer timeout in seconds (default: `1800` = 30 min)
-- `CLAUDE_REVIEWER_MODEL` — Model for Claude reviewer in ensemble mode (default: agent .md setting, currently `sonnet`). Example: `claude-sonnet-4-5-20250929`
+- `CLAUDE_REVIEWER_MODEL` — Model for Claude reviewer in ensemble mode (default: agent .md setting, currently `opus`). Example: `claude-sonnet-4-5-20250929`
 - `CODEX_MODEL` — Model for Codex CLI in ensemble mode (default: Codex CLI's own default)
 - `GEMINI_MODEL` — Model for Gemini CLI in ensemble mode (default: `auto`)
 

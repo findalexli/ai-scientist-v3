@@ -1,7 +1,7 @@
 ---
 name: reviewer
 description: Reviews research paper and full workspace like a senior graduate student — inspects code, figures, literature, experiment organization, and the paper itself.
-model: sonnet
+model: opus
 skills:
   - search-papers
 ---
