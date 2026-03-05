@@ -1,73 +1,29 @@
 {
   "Name": "opencode_instruction_hierarchy",
-  "Title": "When AGENTS.md Breaks: How Provider Prompts and Instruction Complexity Defeat AI Coding Agents",
-  "Hypothesis": "Frontier models fail to follow AGENTS.md under realistic conditions because (a) OpenCode injects 8-15KB of provider-specific base prompts BEFORE AGENTS.md with no priority signal, and (b) real AGENTS.md files have 100+ rules where critical rules get buried. We predict Gemini Flash <50% compliance on at least 2 hard categories.",
-  "Key Insight": "OpenCode assembles the system prompt as [provider_base_prompt (8-15KB)] + [env_block] + [AGENTS.md]. The source code (instruction.ts, system.ts, llm.ts) shows AGENTS.md is appended raw \u2014 no truncation, no priority markers. When AGENTS.md contradicts the base prompt (e.g., gemini.txt says 'add comments sparingly' but AGENTS.md says 'add docstrings everywhere'), the model must resolve the conflict with zero guidance.",
-  "Research Questions": [
-    "RQ1: How does compliance degrade as rules get buried deeper in AGENTS.md (and deeper in the total system prompt)?",
-    "RQ2: When code examples in AGENTS.md contradict prose rules, which do models follow?",
-    "RQ3: When AGENTS.md contradicts the provider base prompt, which wins?",
-    "RQ4: Can critical security rules survive dilution among 150+ style rules?",
-    "RQ5: When rules implicitly conflict, is model resolution consistent across runs?"
+  "Title": "Do Coding Agents Actually Follow AGENTS.md? Testing Real Rules from Real Repos",
+  "Hypothesis": "Coding agents running through real runtimes (OpenCode, Claude Code, Codex CLI) fail to follow a significant fraction of rules in real-world AGENTS.md files, especially rules that go against model defaults or conflict with the runtime's own prompt.",
+  "Approach": [
+    "1. Pull real AGENTS.md files from popular GitHub repos (next.js, sentry, pydantic-ai, browser-use, etc.)",
+    "2. For each repo, identify rules that require the model to do something AGAINST its default behavior",
+    "3. Create coding tasks natural to each repo that test whether the agent follows those rules",
+    "4. Run tasks through coding agent runtimes and judge compliance",
+    "5. Compare: which rules break? Does the runtime matter? Does the model matter?"
   ],
-  "Experimental Setup": [
-    "Install OpenCode: curl -fsSL https://opencode.ai/install | bash",
-    "Each scenario = a git repo with an AGENTS.md + source files.",
-    "Run via: cd test_repo && opencode run -m MODEL --format json -- 'task prompt' > result.json",
-    "Judge compliance via API (cross-vendor: Claude judges Gemini, Gemini judges Claude).",
-    "5 runs per (model, scenario) for statistical power.",
-    "",
-    "Example of one complete experiment:",
-    "  mkdir /tmp/test && cd /tmp/test && git init",
-    "  # write AGENTS.md with 160 lines, tested rule on line 152: 'use snake_case for DB columns'",
-    "  git add -A && git commit -m init",
-    "  opencode run -m google/gemini-3-flash-preview --format json -- 'Add a User model with CREATE TABLE SQL' > result.json",
-    "  # parse result.json, then judge: did the model use snake_case?",
-    "",
-    "CRITICAL: Use `opencode run` for ALL experiment runs. Do NOT call anthropic.Anthropic() or",
-    "google.genai to generate responses \u2014 that bypasses the runtime and invalidates the experiment.",
-    "API calls are fine for the JUDGING step only."
+  "Key Design Principle": "Only test rules where the model would do something DIFFERENT without the AGENTS.md. If a rule says 'use snake_case for SQL columns' and every model already does that by default, it's not a real test. Good tests: rules that contradict common conventions, require unusual patterns, or conflict with each other.",
+  "Runtimes": [
+    "OpenCode: curl -fsSL https://opencode.ai/install | bash && opencode run -m MODEL --format json -- 'task'",
+    "Claude Code: claude -p --model MODEL 'task'",
+    "Codex CLI: codex exec --model MODEL -- 'task'"
   ],
-  "Test Categories": [
-    "1. Positional Decay \u2014 same rule at line 5 vs 50 vs 100 vs 150 (target: <60%)",
-    "2. Example Contradictions \u2014 prose rule vs contradicting code block (target: <50%)",
-    "3. Provider Base Prompt Conflicts \u2014 AGENTS.md contradicts gemini.txt/anthropic.txt directives (target: <50%)",
-    "4. Instruction Dilution \u2014 security rule buried among 150+ style rules (target: <50%)",
-    "5. Implicit Priority Conflicts \u2014 two rules that contradict, no ordering (target: <40%)",
-    "6. Real Production Stress Test \u2014 actual 100+ line AGENTS.md from GitHub repos"
+  "HOW TO RUN EXPERIMENTS": [
+    "Use the actual coding agent CLI (opencode run, claude -p, codex exec) for generating responses.",
+    "Do NOT call model APIs directly (anthropic.Anthropic(), google.genai) — that bypasses the runtime.",
+    "API calls are fine for judging only."
   ],
   "Code References": [
     {
       "url": "https://github.com/sst/opencode",
-      "files": [
-        "packages/opencode/src/session/instruction.ts",
-        "packages/opencode/src/session/system.ts",
-        "packages/opencode/src/session/llm.ts",
-        "packages/opencode/src/session/prompt/gemini.txt",
-        "packages/opencode/src/session/prompt/anthropic.txt"
-      ],
-      "notes": "Pre-cloned to experiment_codebase/cloned_repos/opencode/. Read to understand how the runtime assembles prompts \u2014 helps design non-trivial tests."
+      "notes": "OpenCode source — study how it assembles AGENTS.md into prompts"
     }
-  ],
-  "Models": {
-    "Evaluate via opencode run": [
-      "google/gemini-3-flash-preview (FREE)",
-      "google/gemini-3.1-pro-preview-customtools (FREE)",
-      "anthropic/claude-haiku-4-5",
-      "anthropic/claude-sonnet-4-5 (if budget)"
-    ],
-    "Judge via API": "Cross-vendor only. Claude judges Gemini, Gemini judges Claude."
-  },
-  "What NOT To Do": [
-    "Do NOT call model APIs to generate experiment responses \u2014 use opencode run (API OK for judging only)",
-    "Do NOT use trivially easy rules (binary naming, language choice) \u2014 previous runs scored 95-100%",
-    "Do NOT test merge order or cross-format precedence \u2014 runtime handles these deterministically",
-    "If any category >90% compliance, redesign harder"
-  ],
-  "Success Criteria": [
-    "ALL responses generated via opencode run",
-    "Gemini Flash <50% on at least 2 categories",
-    "Clear position effect and provider-prompt interaction effect",
-    "10+ real production AGENTS.md files, n>=5 per scenario"
   ]
 }
