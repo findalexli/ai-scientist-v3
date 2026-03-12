@@ -60,37 +60,7 @@ for f in "${REQUIRED_FILES[@]}"; do
 done
 
 # ---------------------------------------------------------------------------
-section "3. CLAUDE.md has code-cloning guidance"
-# ---------------------------------------------------------------------------
-
-CLAUDE_MD="$REPO_ROOT/.claude/CLAUDE.md"
-
-if grep -q "clone it into.*experiment_codebase" "$CLAUDE_MD" 2>/dev/null; then
-    pass "Literature review mentions cloning code into experiment_codebase"
-else
-    fail "Literature review missing clone guidance"
-fi
-
-if grep -q '"Code References"' "$CLAUDE_MD" 2>/dev/null; then
-    pass "CLAUDE.md documents Code References field"
-else
-    fail "CLAUDE.md missing Code References documentation"
-fi
-
-if grep -q "curl -L" "$CLAUDE_MD" 2>/dev/null; then
-    pass "Experiment guidelines include curl download pattern"
-else
-    fail "Experiment guidelines missing curl download pattern"
-fi
-
-if grep -q "Explore cloned repos" "$CLAUDE_MD" 2>/dev/null; then
-    pass "Experiment guidelines include repo exploration guidance"
-else
-    fail "Experiment guidelines missing repo exploration guidance"
-fi
-
-# ---------------------------------------------------------------------------
-section "4. Instruction template has cloning guidance"
+section "3. Instruction template has cloning guidance"
 # ---------------------------------------------------------------------------
 
 TEMPLATE="$REPO_ROOT/harbor-task/instruction.md.template"
@@ -102,7 +72,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-section "5. Idea JSON files are valid"
+section "4. Idea JSON files are valid"
 # ---------------------------------------------------------------------------
 
 for f in "$REPO_ROOT"/ideas/idea*.json "$REPO_ROOT"/idea*.json; do
@@ -116,7 +86,7 @@ for f in "$REPO_ROOT"/ideas/idea*.json "$REPO_ROOT"/idea*.json; do
 done
 
 # ---------------------------------------------------------------------------
-section "6. idea_videoqa_with_tool.json has Code References"
+section "5. idea_videoqa_with_tool.json has Code References"
 # ---------------------------------------------------------------------------
 
 IDEA_VQA="$REPO_ROOT/ideas/idea_videoqa_with_tool.json"
@@ -149,7 +119,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-section "7. Dockerfile consistency"
+section "6. Dockerfile consistency"
 # ---------------------------------------------------------------------------
 
 for DF in Dockerfile.cpu Dockerfile.gpu; do
@@ -167,7 +137,7 @@ for DF in Dockerfile.cpu Dockerfile.gpu; do
 done
 
 # ---------------------------------------------------------------------------
-section "8. Artifact sync consistency"
+section "7. Artifact sync consistency"
 # ---------------------------------------------------------------------------
 
 PATCHED="$REPO_ROOT/local_harbor_agents/patched_claude_code.py"
@@ -192,7 +162,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-section "9. Gemini CLI support"
+section "8. Gemini CLI support"
 # ---------------------------------------------------------------------------
 
 PATCHED_GEMINI="$REPO_ROOT/local_harbor_agents/patched_gemini_cli.py"

@@ -70,6 +70,7 @@ JOBS_LIST_CACHE: Dict[str, Any] = {
     "payload": None,
 }
 JOBS_LIST_CACHE_TTL_SEC = 15.0
+GITLAB_MAP_REFRESH_SEC = 300.0  # Refresh GITLAB_JOB_MAP every 5 minutes
 
 
 def _safe_job_id(job_id: str) -> bool:
@@ -93,6 +94,32 @@ async def validate_job_id(request: Request, call_next):
 GITLAB_CLIENT: Optional[GitLabClient] = None
 # Maps job_id -> (project_id, branch) for GitLab-backed jobs.
 GITLAB_JOB_MAP: Dict[str, Tuple[int, str]] = {}
+async def _refresh_gitlab_job_map():
+    """Periodically refresh GITLAB_JOB_MAP so new jobs appear without restart."""
+    while True:
+        await asyncio.sleep(GITLAB_MAP_REFRESH_SEC)
+        if not GITLAB_CLIENT:
+            continue
+        try:
+            gl_jobs = GITLAB_CLIENT.discover_gitlab_jobs()
+            new_map: Dict[str, Tuple[int, str]] = {}
+            for gj in gl_jobs:
+                if gj.get("_project_id") and gj.get("_branch"):
+                    new_map[gj["id"]] = (gj["_project_id"], gj["_branch"])
+            GITLAB_JOB_MAP.clear()
+            GITLAB_JOB_MAP.update(new_map)
+            JOBS_LIST_CACHE["expires_at"] = 0.0  # Invalidate cached /api/jobs
+        except Exception as e:
+            print(f"  GitLab: job map refresh failed: {e}")
+
+
+@app.on_event("startup")
+async def _start_gitlab_refresh():
+    """Start periodic GitLab job map refresh task."""
+    if GITLAB_CLIENT:
+        asyncio.create_task(_refresh_gitlab_job_map())
+
+
 IDEA_NAME_PATTERNS = [
     re.compile(r'"Name"\s*:\s*"([^"]+)"'),
     re.compile(r'\\"Name\\"\s*:\s*\\"([^"\\]+)\\"'),

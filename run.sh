@@ -317,8 +317,12 @@ cleanup() {
     if [[ -n "${GITLAB_KEY:-}" ]] && [[ -d "$_JOB_DIR" ]]; then
         echo ""
         echo "=== Pushing artifacts to GitLab ==="
+        local _PUSH_ARGS=(--job-dir "$_JOB_DIR")
+        if [[ -n "$GITLAB_BRANCH" ]]; then
+            _PUSH_ARGS+=(--branch "$GITLAB_BRANCH")
+        fi
         nohup python3 "$SCRIPT_DIR/scripts/push_to_gitlab.py" \
-            --job-dir "$_JOB_DIR" \
+            "${_PUSH_ARGS[@]}" \
             >> "$_JOB_DIR/gitlab_push.log" 2>&1 &
         echo "  GitLab push started (PID: $!, log: $_JOB_DIR/gitlab_push.log)"
     fi

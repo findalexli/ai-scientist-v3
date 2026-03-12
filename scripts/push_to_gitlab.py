@@ -569,7 +569,7 @@ def _remove_oversized_blobs(work_dir: str, max_mb: int = 90) -> None:
 # Main push logic
 # ---------------------------------------------------------------------------
 
-def push_job(job_dir: str, dry_run: bool = False) -> dict:
+def push_job(job_dir: str, dry_run: bool = False, branch_override: Optional[str] = None) -> dict:
     """Push a single job's artifacts to GitLab.
 
     Returns a dict with push status info.
@@ -596,29 +596,32 @@ def push_job(job_dir: str, dry_run: bool = False) -> dict:
     if not token:
         return {"job": job_name, "status": "error", "reason": "GITLAB_KEY not set"}
 
-    # Resolve branch: prefer matching an existing GitLab branch over creating a new one.
-    # The agent creates branches using datetime.now() at runtime, which differs from the
-    # job directory timestamp. We match by agent prefix + closest timestamp.
-    ts_formatted = ts_raw  # YYYY-MM-DD-HH-MM-SS from parse_job_id
-    if ts_formatted:
-        parts = ts_formatted.split("-")
-        if len(parts) >= 5:
-            ts_formatted = "-".join(parts[:5])  # Drop seconds
-    computed_branch = f"{agent_short}-{ts_formatted}"
+    # Resolve branch: use explicit override if provided (from run.sh), else fuzzy match.
+    if branch_override:
+        branch = branch_override
+        print(f"  Using explicit branch: {branch}")
+    else:
+        ts_formatted = ts_raw  # YYYY-MM-DD-HH-MM-SS from parse_job_id
+        if ts_formatted:
+            parts = ts_formatted.split("-")
+            if len(parts) >= 5:
+                ts_formatted = "-".join(parts[:5])  # Drop seconds
+        computed_branch = f"{agent_short}-{ts_formatted}"
+        branch = computed_branch
 
-    branch = computed_branch
     username = None
     project = None
     try:
         username = get_username(token)
         project = ensure_repo(token, username, repo_name)
         project_id = project["id"]
-        existing_branches = list_branches(token, project_id)
-        matched = _find_matching_branch(existing_branches, agent_short, ts_raw)
-        if matched:
-            branch = matched
-            if matched != computed_branch:
-                print(f"  Matched existing branch: {matched} (instead of {computed_branch})")
+        if not branch_override:
+            existing_branches = list_branches(token, project_id)
+            matched = _find_matching_branch(existing_branches, agent_short, ts_raw)
+            if matched:
+                branch = matched
+                if matched != computed_branch:
+                    print(f"  Matched existing branch: {matched} (instead of {computed_branch})")
     except Exception:
         pass  # Fall back to computed branch name.
 
@@ -767,6 +770,7 @@ def main():
     parser.add_argument("--job-dir", help="Path to a single job directory")
     parser.add_argument("--backfill", action="store_true", help="Push all completed, unpushed jobs")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be pushed without actually pushing")
+    parser.add_argument("--branch", default=None, help="Exact branch name to push to (avoids fuzzy timestamp matching)")
     parser.add_argument("--jobs-dir", default=str(REPO_ROOT / "jobs"), help="Jobs root directory (for --backfill)")
     args = parser.parse_args()
 
@@ -777,7 +781,7 @@ def main():
         if not os.path.isdir(args.job_dir):
             print(f"Error: {args.job_dir} not found", file=sys.stderr)
             sys.exit(1)
-        result = push_job(args.job_dir, dry_run=args.dry_run)
+        result = push_job(args.job_dir, dry_run=args.dry_run, branch_override=args.branch)
         print(json.dumps(result, indent=2))
         sys.exit(0 if result["status"] in ("pushed", "dry_run") else 1)
 
