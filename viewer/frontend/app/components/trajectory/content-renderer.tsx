@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { ImageOff } from "lucide-react";
 import type { ContentPart, MessageContent, ObservationContent } from "~/lib/types";
+import {
+  getImageLabel,
+  getImageSrc,
+  parseStructuredContent,
+} from "./content-utils";
 
 interface ContentRendererProps {
   content: MessageContent | ObservationContent;
@@ -13,10 +18,21 @@ interface ImageError {
   message: string;
 }
 
-function ImageWithFallback({ src, path }: { src: string; path: string }) {
+function ImageWithFallback({
+  src,
+  label,
+}: {
+  src: string;
+  label: string;
+}) {
   const [error, setError] = useState<ImageError | null>(null);
 
   const handleError = async () => {
+    if (src.startsWith("data:")) {
+      setError({ status: 0, message: "Failed to decode embedded image" });
+      return;
+    }
+
     try {
       const response = await fetch(src);
       let message = response.statusText || "Failed to load image";
@@ -47,9 +63,7 @@ function ImageWithFallback({ src, path }: { src: string; path: string }) {
               </span>
             )}
           </div>
-          <div className="text-xs font-mono text-muted-foreground/80 break-all">
-            {path}
-          </div>
+          <div className="text-xs font-mono text-muted-foreground/80 break-all">{label}</div>
           <div className="text-xs text-muted-foreground/60 mt-2">
             {error.message}
           </div>
@@ -62,13 +76,13 @@ function ImageWithFallback({ src, path }: { src: string; path: string }) {
     <div className="my-2">
       <img
         src={src}
-        alt={`Image: ${path}`}
+        alt={`Image: ${label}`}
         className="max-w-full h-auto rounded border border-border"
         style={{ maxHeight: "400px" }}
         loading="lazy"
         onError={handleError}
       />
-      <div className="text-xs text-muted-foreground mt-1">{path}</div>
+      <div className="text-xs text-muted-foreground mt-1">{label}</div>
     </div>
   );
 }
@@ -97,6 +111,11 @@ export function ContentRenderer({
   }
 
   if (typeof content === "string") {
+    const parsedContent = parseStructuredContent(content);
+    if (parsedContent) {
+      return <ContentRenderer content={parsedContent} jobId={jobId} className={className} />;
+    }
+
     return (
       <div className={`text-sm whitespace-pre-wrap break-words ${className}`}>
         {content || <span className="text-muted-foreground italic">(empty)</span>}
@@ -116,13 +135,16 @@ export function ContentRenderer({
         }
 
         if (part.type === "image" && part.source) {
-          // AI Scientist uses job-level paths, not trial-level
-          const imageUrl = `/api/jobs/${encodeURIComponent(jobId)}/artifacts/${part.source.path}`;
+          const imageUrl = getImageSrc(part, jobId);
+          if (!imageUrl) {
+            return null;
+          }
+
           return (
             <ImageWithFallback
               key={idx}
               src={imageUrl}
-              path={part.source.path}
+              label={getImageLabel(part)}
             />
           );
         }

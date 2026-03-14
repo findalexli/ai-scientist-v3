@@ -134,7 +134,12 @@ export interface TrajectoryIndex {
 export interface ContentPart {
   type: "text" | "image";
   text?: string;
-  source?: { media_type: string; path: string };
+  source?: {
+    media_type?: string;
+    path?: string;
+    type?: string;
+    data?: string;
+  };
 }
 
 export type MessageContent = string | ContentPart[];
