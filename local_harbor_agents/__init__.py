@@ -5,6 +5,7 @@ from .patch_docker_gpu import ensure_gpu_support
 try:
     from .patched_claude_code import PatchedClaudeCode
     from .patched_gemini_cli import PatchedGeminiCli
-    __all__ = ["PatchedClaudeCode", "PatchedGeminiCli", "ensure_gpu_support"]
+    from .patched_codex import PatchedCodex
+    __all__ = ["PatchedClaudeCode", "PatchedGeminiCli", "PatchedCodex", "ensure_gpu_support"]
 except ImportError:
     __all__ = ["ensure_gpu_support"]

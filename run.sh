@@ -84,7 +84,7 @@ while [[ $# -gt 0 ]]; do
             echo "  idea.json                  Path to research idea JSON file"
             echo ""
             echo "Options:"
-            echo "  --agent TYPE               Agent: claude-code (default) or gemini-cli"
+            echo "  --agent TYPE               Agent: claude-code (default), gemini-cli, or codex"
             echo "  --model MODEL              LLM model (auto-selected per agent if omitted)"
             echo "  --timeout SECS             Agent timeout in seconds (default: 7200)"
             echo "  --resume-from JOB_PATH     Resume from a previous run's artifacts"
@@ -139,8 +139,13 @@ case "$AGENT_TYPE" in
         PATCHED_AGENT_IMPORT_PATH="local_harbor_agents.patched_gemini_cli:PatchedGeminiCli"
         UPSTREAM_AGENT_FLAG="gemini-cli"
         ;;
+    codex)
+        [[ -z "$MODEL" ]] && MODEL="openai/gpt-5.4"
+        PATCHED_AGENT_IMPORT_PATH="local_harbor_agents.patched_codex:PatchedCodex"
+        UPSTREAM_AGENT_FLAG="codex"
+        ;;
     *)
-        echo "Error: unknown agent type '$AGENT_TYPE' (use claude-code or gemini-cli)" >&2
+        echo "Error: unknown agent type '$AGENT_TYPE' (use claude-code, gemini-cli, or codex)" >&2
         exit 1
         ;;
 esac
@@ -293,6 +298,18 @@ echo "Staging build context..."
 cp -rL "$SCRIPT_DIR/blank_icbinb_latex" "$ENV_DIR/blank_icbinb_latex"
 cp -rL "$SCRIPT_DIR/scripts"            "$ENV_DIR/scripts"
 cp -rL "$SCRIPT_DIR/.claude"            "$ENV_DIR/.claude"
+
+# Stage Codex OAuth auth for Docker build context (if available)
+mkdir -p "$ENV_DIR/.codex_auth"
+touch "$ENV_DIR/.codex_auth/.keep"
+if [[ -f "$HOME/.codex/auth.json" ]]; then
+    cp "$HOME/.codex/auth.json" "$ENV_DIR/.codex_auth/auth.json"
+    echo "Staged Codex OAuth auth.json"
+fi
+if [[ -f "$HOME/.codex/config.toml" ]]; then
+    cp "$HOME/.codex/config.toml" "$ENV_DIR/.codex_auth/config.toml"
+    echo "Staged Codex config.toml"
+fi
 
 # Always create a fresh prev_artifacts dir with a placeholder file.
 # Modal's builder omits empty directories from the build context, which causes
