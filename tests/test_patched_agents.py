@@ -63,6 +63,28 @@ class MockGeminiCli(BaseInstalledAgent):
 
 
 # Inject mock modules into sys.modules
+class MockCodex(BaseInstalledAgent):
+    _OUTPUT_FILENAME = "codex.txt"
+    SUPPORTS_ATIF = True
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.model_name = kwargs.get("model_name", "openai/gpt-5.4")
+        self._reasoning_effort = kwargs.get("reasoning_effort", "high")
+
+    def create_run_agent_commands(self, instruction):
+        return [
+            ExecInput(command="mkdir -p /logs/agent && echo setup"),
+            ExecInput(command=f"codex exec -- {instruction}", cwd="/app",
+                      env={"CODEX_HOME": "/logs/agent"}, timeout_sec=7200),
+        ]
+
+
+# Mock EnvironmentPaths
+class MockEnvironmentPaths:
+    agent_dir = Path("/logs/agent")
+
+
 def _install_harbor_mocks():
     harbor = types.ModuleType("harbor")
     harbor_agents = types.ModuleType("harbor.agents")
@@ -70,11 +92,17 @@ def _install_harbor_mocks():
     harbor_agents_installed_base = types.ModuleType("harbor.agents.installed.base")
     harbor_agents_installed_claude_code = types.ModuleType("harbor.agents.installed.claude_code")
     harbor_agents_installed_gemini_cli = types.ModuleType("harbor.agents.installed.gemini_cli")
+    harbor_agents_installed_codex = types.ModuleType("harbor.agents.installed.codex")
+    harbor_models = types.ModuleType("harbor.models")
+    harbor_models_trial = types.ModuleType("harbor.models.trial")
+    harbor_models_trial_paths = types.ModuleType("harbor.models.trial.paths")
 
     harbor_agents_installed_base.ExecInput = ExecInput
     harbor_agents_installed_base.BaseInstalledAgent = BaseInstalledAgent
     harbor_agents_installed_claude_code.ClaudeCode = MockClaudeCode
     harbor_agents_installed_gemini_cli.GeminiCli = MockGeminiCli
+    harbor_agents_installed_codex.Codex = MockCodex
+    harbor_models_trial_paths.EnvironmentPaths = MockEnvironmentPaths
 
     sys.modules["harbor"] = harbor
     sys.modules["harbor.agents"] = harbor_agents
@@ -82,6 +110,10 @@ def _install_harbor_mocks():
     sys.modules["harbor.agents.installed.base"] = harbor_agents_installed_base
     sys.modules["harbor.agents.installed.claude_code"] = harbor_agents_installed_claude_code
     sys.modules["harbor.agents.installed.gemini_cli"] = harbor_agents_installed_gemini_cli
+    sys.modules["harbor.agents.installed.codex"] = harbor_agents_installed_codex
+    sys.modules["harbor.models"] = harbor_models
+    sys.modules["harbor.models.trial"] = harbor_models_trial
+    sys.modules["harbor.models.trial.paths"] = harbor_models_trial_paths
 
 
 _install_harbor_mocks()
@@ -92,6 +124,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from local_harbor_agents.patched_claude_code import PatchedClaudeCode
 from local_harbor_agents.patched_gemini_cli import PatchedGeminiCli
+from local_harbor_agents.patched_codex import PatchedCodex
 
 
 # ===========================================================================
@@ -383,6 +416,7 @@ class TestArtifactSyncParity(unittest.TestCase):
     def setUp(self):
         self.cc_wrapped = PatchedClaudeCode()._wrap_with_artifact_sync("true")
         self.gc_wrapped = PatchedGeminiCli()._wrap_with_artifact_sync("true")
+        self.cx_wrapped = PatchedCodex(model_name="openai/gpt-5.4")._wrap_with_artifact_sync("true")
 
     def test_all_artifacts_in_claude(self):
         for artifact in self.REQUIRED_ARTIFACTS:
@@ -394,13 +428,20 @@ class TestArtifactSyncParity(unittest.TestCase):
             with self.subTest(artifact=artifact):
                 self.assertIn(artifact, self.gc_wrapped)
 
-    def test_both_write_to_agent_artifacts(self):
+    def test_all_artifacts_in_codex(self):
+        for artifact in self.REQUIRED_ARTIFACTS:
+            with self.subTest(artifact=artifact):
+                self.assertIn(artifact, self.cx_wrapped)
+
+    def test_all_write_to_agent_artifacts(self):
         self.assertIn("/logs/agent/artifacts", self.cc_wrapped)
         self.assertIn("/logs/agent/artifacts", self.gc_wrapped)
+        self.assertIn("/logs/agent/artifacts", self.cx_wrapped)
 
-    def test_both_write_to_verifier_artifacts(self):
+    def test_all_write_to_verifier_artifacts(self):
         self.assertIn("/logs/verifier/artifacts", self.cc_wrapped)
         self.assertIn("/logs/verifier/artifacts", self.gc_wrapped)
+        self.assertIn("/logs/verifier/artifacts", self.cx_wrapped)
 
 
 # ===========================================================================
@@ -440,6 +481,192 @@ class TestClaudeChmodInSync(unittest.TestCase):
         # First copy_tree call inside sync_artifacts (not the function definition)
         copy_pos = sync_body.index('copy_tree "/app')
         self.assertLess(chmod_pos, copy_pos, "chmod should run before copying artifacts")
+
+
+# ===========================================================================
+# PatchedCodex tests
+# ===========================================================================
+
+class TestPatchedCodexInit(unittest.TestCase):
+    def test_default_interval(self):
+        agent = PatchedCodex(model_name="openai/gpt-5.4")
+        self.assertEqual(agent._artifact_sync_interval_sec, 180)
+
+    def test_custom_interval(self):
+        agent = PatchedCodex(artifact_sync_interval_sec=300, model_name="openai/gpt-5.4")
+        self.assertEqual(agent._artifact_sync_interval_sec, 300)
+
+    def test_interval_clamped_to_minimum(self):
+        agent = PatchedCodex(artifact_sync_interval_sec=10, model_name="openai/gpt-5.4")
+        self.assertEqual(agent._artifact_sync_interval_sec, 30)
+
+    def test_invalid_interval_string(self):
+        agent = PatchedCodex(artifact_sync_interval_sec="not_a_number", model_name="openai/gpt-5.4")
+        self.assertEqual(agent._artifact_sync_interval_sec, 180)
+
+    def test_invalid_interval_none(self):
+        agent = PatchedCodex(artifact_sync_interval_sec=None, model_name="openai/gpt-5.4")
+        self.assertEqual(agent._artifact_sync_interval_sec, 180)
+
+
+class TestPatchedCodexWrap(unittest.TestCase):
+    def setUp(self):
+        self.agent = PatchedCodex(artifact_sync_interval_sec=60, model_name="openai/gpt-5.4")
+        self.wrapped = self.agent._wrap_with_artifact_sync("echo codex_cmd")
+
+    def test_contains_base_command(self):
+        self.assertIn("echo codex_cmd", self.wrapped)
+
+    def test_contains_sync_functions(self):
+        self.assertIn("copy_tree()", self.wrapped)
+        self.assertIn("copy_file()", self.wrapped)
+        self.assertIn("sync_artifacts()", self.wrapped)
+
+    def test_contains_trap(self):
+        self.assertIn("trap", self.wrapped)
+
+    def test_contains_sleep_interval(self):
+        self.assertIn("sleep 60", self.wrapped)
+
+    def test_syncs_experiment_codebase(self):
+        self.assertIn("experiment_codebase", self.wrapped)
+
+    def test_syncs_figures(self):
+        self.assertIn("figures", self.wrapped)
+
+    def test_syncs_literature(self):
+        self.assertIn("literature", self.wrapped)
+
+    def test_syncs_paper_pdf(self):
+        self.assertIn("paper.pdf", self.wrapped)
+
+    def test_syncs_paper_tex(self):
+        self.assertIn("paper.tex", self.wrapped)
+
+    def test_syncs_submissions(self):
+        self.assertIn("submissions", self.wrapped)
+
+    def test_syncs_codex_sessions(self):
+        self.assertIn("codex_sessions", self.wrapped)
+
+    def test_does_not_sync_claude_sessions(self):
+        self.assertNotIn("claude_sessions", self.wrapped)
+
+    def test_captures_exit_code(self):
+        self.assertIn("AGENT_EXIT=$?", self.wrapped)
+        self.assertIn('exit "$AGENT_EXIT"', self.wrapped)
+
+    def test_kills_sync_process(self):
+        self.assertIn("SYNC_PID", self.wrapped)
+        self.assertIn('kill "$SYNC_PID"', self.wrapped)
+
+    def test_wrapped_in_bash(self):
+        self.assertTrue(self.wrapped.startswith("bash -c "))
+
+
+class TestPatchedCodexCommands(unittest.TestCase):
+    def test_returns_two_commands(self):
+        agent = PatchedCodex(model_name="openai/gpt-5.4")
+        commands = agent.create_run_agent_commands("do stuff")
+        self.assertEqual(len(commands), 2)
+
+    def test_setup_prefers_oauth_auth(self):
+        agent = PatchedCodex(model_name="openai/gpt-5.4")
+        commands = agent.create_run_agent_commands("do stuff")
+        setup = commands[0].command
+        self.assertIn("/app/.codex_auth/auth.json", setup)
+        self.assertIn("OAuth", setup)
+
+    def test_setup_falls_back_to_api_key(self):
+        agent = PatchedCodex(model_name="openai/gpt-5.4")
+        commands = agent.create_run_agent_commands("do stuff")
+        setup = commands[0].command
+        self.assertIn("OPENAI_API_KEY", setup)
+
+    def test_setup_copies_config_toml(self):
+        agent = PatchedCodex(model_name="openai/gpt-5.4")
+        commands = agent.create_run_agent_commands("do stuff")
+        setup = commands[0].command
+        self.assertIn("/app/.codex_auth/config.toml", setup)
+
+    def test_run_command_wrapped_with_sync(self):
+        agent = PatchedCodex(model_name="openai/gpt-5.4")
+        commands = agent.create_run_agent_commands("do stuff")
+        self.assertIn("sync_artifacts", commands[1].command)
+
+    def test_run_command_uses_codex_exec(self):
+        agent = PatchedCodex(model_name="openai/gpt-5.4")
+        commands = agent.create_run_agent_commands("do stuff")
+        self.assertIn("codex exec", commands[1].command)
+
+    def test_run_command_strips_model_prefix(self):
+        agent = PatchedCodex(model_name="openai/gpt-5.4")
+        commands = agent.create_run_agent_commands("do stuff")
+        self.assertIn("--model gpt-5.4", commands[1].command)
+        self.assertNotIn("openai/", commands[1].command)
+
+    def test_run_command_has_sandbox_bypass(self):
+        agent = PatchedCodex(model_name="openai/gpt-5.4")
+        commands = agent.create_run_agent_commands("do stuff")
+        self.assertIn("--dangerously-bypass-approvals-and-sandbox", commands[1].command)
+
+    def test_run_command_has_json_output(self):
+        agent = PatchedCodex(model_name="openai/gpt-5.4")
+        commands = agent.create_run_agent_commands("do stuff")
+        self.assertIn("--json", commands[1].command)
+
+    def test_run_cwd_is_app(self):
+        agent = PatchedCodex(model_name="openai/gpt-5.4")
+        commands = agent.create_run_agent_commands("do stuff")
+        self.assertEqual(commands[1].cwd, "/app")
+
+    def test_raises_without_model(self):
+        agent = PatchedCodex(model_name=None)
+        with self.assertRaises(ValueError):
+            agent.create_run_agent_commands("do stuff")
+
+
+# ===========================================================================
+# GitLab push parity — all 3 agents should have periodic git_push
+# ===========================================================================
+
+class TestGitLabPushParity(unittest.TestCase):
+    """Ensure all 3 patched agents have consistent GitLab push behavior."""
+
+    def setUp(self):
+        self.cc_wrapped = PatchedClaudeCode()._wrap_with_artifact_sync("true")
+        self.gc_wrapped = PatchedGeminiCli()._wrap_with_artifact_sync("true")
+        self.cx_wrapped = PatchedCodex(model_name="openai/gpt-5.4")._wrap_with_artifact_sync("true")
+
+    def test_all_have_git_push_function(self):
+        for name, wrapped in [("claude", self.cc_wrapped), ("gemini", self.gc_wrapped), ("codex", self.cx_wrapped)]:
+            with self.subTest(agent=name):
+                self.assertIn("git_push()", wrapped)
+
+    def test_all_trap_git_push_on_exit(self):
+        for name, wrapped in [("claude", self.cc_wrapped), ("gemini", self.gc_wrapped), ("codex", self.cx_wrapped)]:
+            with self.subTest(agent=name):
+                # The trap string gets shell-escaped by shlex.quote, so check components
+                self.assertIn("trap", wrapped)
+                self.assertIn("sync_artifacts; git_push", wrapped)
+                self.assertIn("EXIT TERM INT", wrapped)
+
+    def test_all_have_sync_cycle_counter(self):
+        for name, wrapped in [("claude", self.cc_wrapped), ("gemini", self.gc_wrapped), ("codex", self.cx_wrapped)]:
+            with self.subTest(agent=name):
+                self.assertIn("SYNC_CYCLE", wrapped)
+                self.assertIn("SYNC_CYCLE % 5", wrapped)
+
+    def test_all_have_gitlab_env_fallback(self):
+        for name, wrapped in [("claude", self.cc_wrapped), ("gemini", self.gc_wrapped), ("codex", self.cx_wrapped)]:
+            with self.subTest(agent=name):
+                self.assertIn(".gitlab_env", wrapped)
+
+    def test_all_setup_git_remote(self):
+        for name, wrapped in [("claude", self.cc_wrapped), ("gemini", self.gc_wrapped), ("codex", self.cx_wrapped)]:
+            with self.subTest(agent=name):
+                self.assertIn("git remote add origin", wrapped)
+                self.assertIn("GITLAB_REPO_URL", wrapped)
 
 
 if __name__ == "__main__":
