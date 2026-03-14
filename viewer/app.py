@@ -328,32 +328,73 @@ def load_idea_payload(job_id: str, config: dict, job_dir: Optional[str] = None) 
             return {"found": False, "stem": stem, "source": source, "content": None, "format": None}
 
 
-def get_job_status(job_dir: str) -> str:
-    """Determine if a job is running, completed, or failed."""
-    activity_path = find_agent_activity_path(job_dir)
-    if not activity_path:
-        return "unknown"
-
-    # Check mtime — if modified < 5 min ago → running
+def _newest_mtime_in_dir(dirpath: str, max_depth: int = 2) -> float:
+    """Return the newest mtime of any file in a directory (shallow scan)."""
+    newest = 0.0
     try:
-        mtime = os.path.getmtime(activity_path)
-        age = time.time() - mtime
-        if age < 300:  # 5 minutes
-            return "running"
+        for root, dirs, files in os.walk(dirpath):
+            # Limit depth to avoid scanning huge trees
+            depth = root[len(dirpath):].count(os.sep)
+            if depth >= max_depth:
+                dirs.clear()
+                continue
+            for fname in files:
+                try:
+                    mt = os.path.getmtime(os.path.join(root, fname))
+                    if mt > newest:
+                        newest = mt
+                except OSError:
+                    pass
     except OSError:
-        return "unknown"
+        pass
+    return newest
 
-    # Check for top-level result.json (written by Harbor when job truly finishes)
+
+def get_job_status(job_dir: str) -> str:
+    """Determine if a job is running, completed, or failed.
+
+    Detection strategy (works without Docker access):
+    1. If top-level result.json has finished_at → completed (Harbor writes this on exit)
+    2. If any file in agent/artifacts/ was modified < 6 min ago → running
+       (artifact sync writes every ~3 min, so 6 min = 2x safety margin)
+    3. If trajectory/activity file modified < 5 min ago → running
+    4. Otherwise → idle
+    """
+    # Check for top-level result.json first (definitive completion signal)
     top_result = os.path.join(job_dir, "result.json")
     if os.path.exists(top_result):
         try:
             with open(top_result) as f:
-                import json as _json
-                data = _json.load(f)
+                data = json.load(f)
             if data.get("finished_at"):
                 return "completed"
         except (OSError, ValueError):
             pass
+
+    # Check artifact sync activity (most reliable running signal)
+    # Artifact sync writes every ~3 min; if anything updated < 6 min ago, still running
+    now = time.time()
+    for entry in os.listdir(job_dir):
+        if entry.startswith("harbor-task"):
+            artifacts_dir = os.path.join(job_dir, entry, "agent", "artifacts")
+            if os.path.isdir(artifacts_dir):
+                newest = _newest_mtime_in_dir(artifacts_dir)
+                if newest and (now - newest) < 360:  # 6 minutes
+                    return "running"
+
+    # Check trajectory/activity file mtime
+    activity_path = find_agent_activity_path(job_dir)
+    if activity_path:
+        try:
+            mtime = os.path.getmtime(activity_path)
+            if (now - mtime) < 300:  # 5 minutes
+                return "running"
+        except OSError:
+            pass
+
+    # No activity file at all
+    if not activity_path:
+        return "unknown"
 
     # Fallback: check for result.json in verifier artifacts
     for entry in os.listdir(job_dir):
