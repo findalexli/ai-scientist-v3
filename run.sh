@@ -253,6 +253,9 @@ done
 # Pass AGENT_TYPE to the container so submit_for_review.sh knows which CLI to use
 echo "AGENT_TYPE=$AGENT_TYPE" >> "$ENV_DIR/.env"
 
+# Force ensemble reviewer mode (override any stale value in .env)
+echo "REVIEWER_MODE=ensemble" >> "$ENV_DIR/.env"
+
 # --- GitLab repo setup (if GITLAB_KEY is set) ---
 GITLAB_REPO_URL=""
 GITLAB_BRANCH=""
