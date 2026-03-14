@@ -43,7 +43,7 @@ Reviewer configuration:
    ```bash
    bash scripts/submit_for_review.sh latex/template.tex
    ```
-   This generates 3 reviews (comprehensive, idea/literature, code quality), saves them, and creates a versioned snapshot in `submissions/v{N}_{timestamp}/`. Use `timeout: 600000` (10 minutes) for the Bash tool call. Do NOT override `REVIEWER_MODE` — the default ensemble mode is correct.
+   The default 'ensemble' mode generates 3 reviews (comprehensive, idea/literature, code quality), saves them, and creates a versioned snapshot in `submissions/v{N}_{timestamp}/`. Use `timeout: 2400000` (40 minutes) for the Bash tool call, since ensemble reviewers run in parallel and each may take up to 30 minutes. Do NOT override `REVIEWER_MODE`, the default ensemble mode is correct.
 7. **Read Reviewer Feedback** — Read the reviewer's feedback from `submissions/v{N}_{timestamp}/reviewer_communications/response.md` (path printed by the script). The file contains three `## Review (...)` sections — one per reviewer.
 8. **Continue Iterate, autonomously** — Address the reviewer's questions and weaknesses:
    - Run additional experiments if needed
