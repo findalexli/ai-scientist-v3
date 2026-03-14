@@ -60,9 +60,21 @@ sync_artifacts() {{
     done
 }}
 
-trap 'sync_artifacts' EXIT TERM INT
+git_push() {{
+    cd /app
+    if git remote get-url origin &>/dev/null; then
+        git add -A 2>/dev/null
+        git commit -m "Auto-sync $(date -u +%H:%M)" --allow-empty-message 2>/dev/null || true
+        git push origin "$(git branch --show-current)" 2>/dev/null || true
+    fi
+}}
+
+trap 'sync_artifacts; git_push' EXIT TERM INT
 
 # --- Git remote + branch setup (if GITLAB_REPO_URL is set) ---
+if [ -z "${{GITLAB_REPO_URL:-}}" ] && [ -f /app/scripts/.gitlab_env ]; then
+    set -a; source /app/scripts/.gitlab_env; set +a
+fi
 if [ -n "${{GITLAB_REPO_URL:-}}" ]; then
     cd /app
     git remote add origin "$GITLAB_REPO_URL" 2>/dev/null || git remote set-url origin "$GITLAB_REPO_URL"
@@ -73,10 +85,15 @@ if [ -n "${{GITLAB_REPO_URL:-}}" ]; then
     echo "GitLab: pushed initial commit to branch ${{GITLAB_BRANCH:-main}}"
 fi
 
+SYNC_CYCLE=0
 (
     while true; do
         sleep {self._artifact_sync_interval_sec}
         sync_artifacts
+        SYNC_CYCLE=$((SYNC_CYCLE + 1))
+        if [ $((SYNC_CYCLE % 5)) -eq 0 ]; then
+            git_push
+        fi
     done
 ) &
 SYNC_PID=$!

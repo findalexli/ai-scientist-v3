@@ -26,7 +26,7 @@ API keys (via environment variables, if configured):
 - `GEMINI_API_KEY` / `GOOGLE_API_KEY` — Gemini CLI (ensemble reviewer mode)
 
 Reviewer configuration:
-- `REVIEWER_MODE` — `subagent` (default, single reviewer), `ensemble` (3 parallel reviewers), or `api` (external API)
+- `REVIEWER_MODE` — `ensemble` (default, 3 parallel reviewers), `subagent` (single reviewer), or `api` (external API)
 - `REVIEWER_TIMEOUT` — Per-reviewer timeout in seconds (default: `1800` = 30 min)
 - `CLAUDE_REVIEWER_MODEL` — Model for Claude reviewer in ensemble mode (default: agent .md setting, currently `opus`). Example: `claude-sonnet-4-5-20250929`
 - `CODEX_MODEL` — Model for Codex CLI in ensemble mode (default: Codex CLI's own default)
@@ -39,17 +39,12 @@ Reviewer configuration:
 3. **Run Experiments** — Use your best judgment on methodology: baselines, ablations, rigor appropriate to the claims.
 4. **Plot Results** — Create publication-quality figures in `figures/`. Visually inspect each PNG with the `Read` tool before finalizing.
 5. **Write Paper** — Fill in `latex/template.tex`. Compile with `bash scripts/compile_latex.sh latex/`. Must be 4 pages of main text (excluding references and appendix). After compilation, visually inspect the PDF with the `Read` tool to catch formatting issues.
-6. **Submit for Review** — Run the reviewer:
+6. **Submit for Review** — Run the reviewer (ensemble mode, 3 parallel reviewers):
    ```bash
    bash scripts/submit_for_review.sh latex/template.tex
    ```
-   This generates a review, saves the response, and creates a versioned snapshot in `submissions/v{N}_{timestamp}/`. Use `timeout: 600000` (10 minutes) for the Bash tool call.
-   For multi-perspective feedback, use ensemble mode (runs 3 diversified reviewers in parallel):
-   ```bash
-   REVIEWER_MODE=ensemble bash scripts/submit_for_review.sh latex/template.tex
-   ```
-   Ensemble mode produces 3 reviews: comprehensive (reviewer.md), idea/literature (idea-reviewer.md), and code quality (code-reviewer.md). Each can run on a different CLI backend (Claude, Codex, Gemini) if the corresponding API keys are set.
-7. **Read Reviewer Feedback** — Read the reviewer's feedback from `submissions/v{N}_{timestamp}/reviewer_communications/response.md` (path printed by the script). In subagent mode, the file starts with a `## Review` section. In ensemble mode, it contains three `## Review (...)` sections — one per reviewer.
+   The default 'ensemble' mode generates 3 reviews (comprehensive, idea/literature, code quality), saves them, and creates a versioned snapshot in `submissions/v{N}_{timestamp}/`. Use `timeout: 2400000` (40 minutes) for the Bash tool call, since ensemble reviewers run in parallel and each may take up to 30 minutes. Do NOT override `REVIEWER_MODE`, the default ensemble mode is correct.
+7. **Read Reviewer Feedback** — Read the reviewer's feedback from `submissions/v{N}_{timestamp}/reviewer_communications/response.md` (path printed by the script). The file contains three `## Review (...)` sections — one per reviewer.
 8. **Continue Iterate, autonomously** — Address the reviewer's questions and weaknesses:
    - Run additional experiments if needed
    - Search for additional literature with `/search-papers` to contextualize new results or address gaps

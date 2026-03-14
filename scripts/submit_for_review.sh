@@ -54,8 +54,9 @@ EXTRACT_SCRIPT="$BASE_DIR/.claude/skills/review-paper/scripts/extract_and_genera
 
 mkdir -p "$SUBMISSIONS_DIR"
 
-REVIEWER_MODE="${REVIEWER_MODE:-subagent}"
+REVIEWER_MODE="${REVIEWER_MODE:-ensemble}"
 REVIEWER_TIMEOUT="${REVIEWER_TIMEOUT:-1800}"  # Per-reviewer timeout in seconds (default: 30 min)
+CLAUDE_REVIEWER_MODEL="${CLAUDE_REVIEWER_MODEL:-}"  # Override model for Claude reviewer (e.g. claude-sonnet-4-5-20250929)
 
 # =============================================================================
 # Helper functions (used by both subagent and ensemble modes)
@@ -161,11 +162,20 @@ run_single_reviewer() {
     case "$cli_type" in
         claude)
             # CLAUDECODE="" clears nesting guard
-            CLAUDECODE="" run_with_timeout "$REVIEWER_TIMEOUT" claude -p \
-                --agent "$agent_name" \
-                --output-format text \
-                "$task_prompt" \
-                > "$output_file" 2>"$stderr_file" || true
+            if [ -n "${CLAUDE_REVIEWER_MODEL:-}" ]; then
+                CLAUDECODE="" run_with_timeout "$REVIEWER_TIMEOUT" claude -p \
+                    --model "$CLAUDE_REVIEWER_MODEL" \
+                    --agent "$agent_name" \
+                    --output-format text \
+                    "$task_prompt" \
+                    > "$output_file" 2>"$stderr_file" || true
+            else
+                CLAUDECODE="" run_with_timeout "$REVIEWER_TIMEOUT" claude -p \
+                    --agent "$agent_name" \
+                    --output-format text \
+                    "$task_prompt" \
+                    > "$output_file" 2>"$stderr_file" || true
+            fi
             ;;
         codex)
             local prompt_file
@@ -421,17 +431,58 @@ elif [ "$REVIEWER_MODE" = "subagent" ]; then
         # Check claude first (more common in this environment)
         if command -v claude &>/dev/null || [ -f "$HOME/.local/bin/claude" ]; then
             SUBAGENT_CLI="claude-code"
+        elif command -v codex &>/dev/null; then
+            SUBAGENT_CLI="codex"
         elif command -v gemini &>/dev/null; then
             SUBAGENT_CLI="gemini-cli"
         else
-            echo "Error: REVIEWER_MODE=subagent requires claude or gemini CLI." >&2
+            echo "Error: REVIEWER_MODE=subagent requires claude, codex, or gemini CLI." >&2
             exit 1
         fi
     fi
 
     echo "Invoking reviewer subagent via $SUBAGENT_CLI (this may take several minutes)..."
 
-    if [ "$SUBAGENT_CLI" = "gemini-cli" ]; then
+    if [ "$SUBAGENT_CLI" = "codex" ]; then
+        # --- Codex CLI reviewer ---
+        REVIEWER_PROMPT_FILE="$BASE_DIR/.claude/agents/reviewer.md"
+        if [ ! -f "$REVIEWER_PROMPT_FILE" ]; then
+            echo "Error: reviewer prompt not found at $REVIEWER_PROMPT_FILE" >&2
+            exit 1
+        fi
+
+        REVIEW_PROMPT_FILE=$(mktemp)
+        strip_frontmatter "$REVIEWER_PROMPT_FILE" > "$REVIEW_PROMPT_FILE"
+        printf '\n\nReview the research submission. The paper is at %s. Inspect the full workspace: experiment_codebase/, figures/, literature/, and latex/. Follow your review procedure and produce your review.\n' "$TEX_PATH" >> "$REVIEW_PROMPT_FILE"
+
+        # Bridge API key if needed
+        if [ -z "${CODEX_API_KEY:-}" ] && [ -n "${OPENAI_API_KEY:-}" ]; then
+            export CODEX_API_KEY="$OPENAI_API_KEY"
+        fi
+
+        local codex_sandbox_flag="--full-auto"
+        if [ -f "/.dockerenv" ] || grep -qE 'docker|lxc|containerd|/ta-' /proc/1/cgroup 2>/dev/null; then
+            codex_sandbox_flag="--dangerously-bypass-approvals-and-sandbox"
+        fi
+
+        cd "$BASE_DIR"
+        if [ -n "${CODEX_MODEL:-}" ]; then
+            run_with_timeout "$REVIEWER_TIMEOUT" codex exec \
+                --model "$CODEX_MODEL" \
+                $codex_sandbox_flag \
+                --output-last-message "$RAW_RESPONSE" \
+                - < "$REVIEW_PROMPT_FILE" 2>"$BASE_DIR/reviewer_subagent_stderr.log" || true
+        else
+            run_with_timeout "$REVIEWER_TIMEOUT" codex exec \
+                $codex_sandbox_flag \
+                --output-last-message "$RAW_RESPONSE" \
+                - < "$REVIEW_PROMPT_FILE" 2>"$BASE_DIR/reviewer_subagent_stderr.log" || true
+        fi
+        rm -f "$REVIEW_PROMPT_FILE"
+
+        echo "Codex reviewer subagent complete."
+
+    elif [ "$SUBAGENT_CLI" = "gemini-cli" ]; then
         # --- Gemini CLI reviewer ---
         # Read the reviewer prompt from the agent config file
         REVIEWER_PROMPT_FILE="$BASE_DIR/.claude/agents/reviewer.md"

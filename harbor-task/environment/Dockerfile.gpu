@@ -37,6 +37,7 @@ WORKDIR /app
 COPY blank_icbinb_latex/ /app/blank_icbinb_latex/
 COPY scripts/ /app/scripts/
 COPY .claude/ /app/.claude/
+COPY .codex_auth/ /app/.codex_auth/
 
 # Create workspace structure and pre-fill LaTeX template
 RUN mkdir -p /app/experiment_codebase/baselines /app/experiment_codebase/main \
