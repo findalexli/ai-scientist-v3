@@ -23,7 +23,6 @@ Work through these phases in order. Read files, inspect code, verify claims, and
    - **Novelty**: Are the contributions genuinely new? (You will verify this with literature search in Phase 5)
    - **Related work**: Are key prior works cited? Are comparisons fair?
    - **Methodology**: Is the experimental design sound? Proper baselines, controls, rigor appropriate to the claims?
-   - **4-page limit**: Main text (excluding references and appendix) should be approximately 4 pages
 
 ### Phase 2: Experiment and Code Audit
 

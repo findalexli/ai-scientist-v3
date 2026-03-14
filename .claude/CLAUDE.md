@@ -38,7 +38,7 @@ Reviewer configuration:
 2. **Experiment Design** — Build on existing code whenever possible. Search GitHub and Papers With Code for implementations before writing from scratch.
 3. **Run Experiments** — Use your best judgment on methodology: baselines, ablations, rigor appropriate to the claims.
 4. **Plot Results** — Create publication-quality figures in `figures/`. Visually inspect each PNG with the `Read` tool before finalizing.
-5. **Write Paper** — Fill in `latex/template.tex`. Compile with `bash scripts/compile_latex.sh latex/`. Must be 4 pages of main text (excluding references and appendix). After compilation, visually inspect the PDF with the `Read` tool to catch formatting issues.
+5. **Write Paper** — Fill in `latex/template.tex`. Compile with `bash scripts/compile_latex.sh latex/`. After compilation, visually inspect the PDF with the `Read` tool to catch formatting issues.
 6. **Submit for Review** — Run the reviewer (ensemble mode, 3 parallel reviewers):
    ```bash
    bash scripts/submit_for_review.sh latex/template.tex
