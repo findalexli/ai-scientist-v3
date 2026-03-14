@@ -783,6 +783,12 @@ def _discover_jobs_local() -> list:
 
         sub_count = get_submission_count(job_dir)
 
+        # Hide short-lived completed/idle jobs (smoke tests, crashed runs).
+        # Running jobs are always shown regardless of duration.
+        MIN_DURATION_DISPLAY_SEC = 2400  # 40 minutes
+        if status not in ("running",) and duration_seconds is not None and duration_seconds < MIN_DURATION_DISPLAY_SEC:
+            continue
+
         jobs.append({
             "id": name,
             "dir": job_dir,
