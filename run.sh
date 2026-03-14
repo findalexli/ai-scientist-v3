@@ -17,6 +17,7 @@ IDEA_JSON=""
 MODEL=""           # empty = auto-select based on agent type
 TIMEOUT="14400"
 RESUME_FROM=""
+RESUME_BRANCH=""   # auto-detected from job dir, or set via gitlab_setup.py
 ENV_TYPE=""        # empty = docker (default)
 GPUS="0"
 MODAL_SECRET="harbor-env"
@@ -238,6 +239,15 @@ if [[ -n "$RESUME_FROM" ]]; then
     echo "Resuming from: $PREV_ARTIFACTS"
     ls "$PREV_ARTIFACTS/" 2>/dev/null | sed 's/^/  /'
     echo ""
+
+    # Auto-detect previous run's GitLab branch from saved metadata
+    for branch_file in "$RESUME_FROM/gitlab_branch" "$RESUME_FROM"/harbor-task-*/gitlab_branch; do
+        if [[ -f "$branch_file" ]]; then
+            RESUME_BRANCH="$(cat "$branch_file")"
+            echo "Detected previous GitLab branch: $RESUME_BRANCH"
+            break
+        fi
+    done
 fi
 
 # --- Copy .env into the build context so docker-compose env_file picks it up ---
@@ -263,14 +273,17 @@ GITLAB_BRANCHES=""
 GITLAB_WEB_URL=""
 if [[ -n "${GITLAB_KEY:-}" ]]; then
     GITLAB_TS="$(date -u +%Y-%m-%d-%H-%M)"
+    GITLAB_SETUP_ARGS=(--idea-name "$IDEA_NAME" --agent "$AGENT_TYPE" --timestamp "$GITLAB_TS")
+    if [[ -n "$RESUME_BRANCH" ]]; then
+        GITLAB_SETUP_ARGS+=(--resume-branch "$RESUME_BRANCH")
+    fi
     GITLAB_JSON=$(python3 "$SCRIPT_DIR/scripts/gitlab_setup.py" \
-        --idea-name "$IDEA_NAME" \
-        --agent "$AGENT_TYPE" \
-        --timestamp "$GITLAB_TS" 2>/dev/null || echo "")
+        "${GITLAB_SETUP_ARGS[@]}" 2>/dev/null || echo "")
     if [[ -n "$GITLAB_JSON" ]]; then
         GITLAB_REPO_URL=$(echo "$GITLAB_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('repo_url',''))")
         GITLAB_BRANCH=$(echo "$GITLAB_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('branch',''))")
         GITLAB_WEB_URL=$(echo "$GITLAB_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('web_url',''))")
+        GITLAB_RESUME_BRANCH=$(echo "$GITLAB_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('resume_branch',''))")
         GITLAB_BRANCHES=$(echo "$GITLAB_JSON" | python3 -c "
 import sys, json
 branches = json.load(sys.stdin).get('sibling_branches', [])
@@ -284,13 +297,18 @@ else:
             echo ""
             echo "GITLAB_REPO_URL=$GITLAB_REPO_URL"
             echo "GITLAB_BRANCH=$GITLAB_BRANCH"
+            [[ -n "$GITLAB_RESUME_BRANCH" ]] && echo "GITLAB_RESUME_BRANCH=$GITLAB_RESUME_BRANCH"
         } >> "$ENV_DIR/.env"
         # Also write to scripts/.gitlab_env (baked into image, works on Modal where .env isn't mounted)
         {
             echo "GITLAB_REPO_URL=$GITLAB_REPO_URL"
             echo "GITLAB_BRANCH=$GITLAB_BRANCH"
+            [[ -n "$GITLAB_RESUME_BRANCH" ]] && echo "GITLAB_RESUME_BRANCH=$GITLAB_RESUME_BRANCH"
         } > "$SCRIPT_DIR/scripts/.gitlab_env"
         echo "GitLab repo: $GITLAB_WEB_URL (branch: $GITLAB_BRANCH)"
+        if [[ -n "$GITLAB_RESUME_BRANCH" ]]; then
+            echo "  Branching off: $GITLAB_RESUME_BRANCH"
+        fi
     else
         echo "Warning: GitLab setup failed (continuing without git push)" >&2
     fi
@@ -319,7 +337,11 @@ fi
 # COPY prev_artifacts/ to fail. The placeholder ensures the dir is non-empty.
 mkdir -p "$ENV_DIR/prev_artifacts"
 touch "$ENV_DIR/prev_artifacts/.keep"
-if [[ -n "$PREV_ARTIFACTS" ]]; then
+if [[ -n "$GITLAB_RESUME_BRANCH" ]]; then
+    # Git-based resume: workspace will be populated by branching off the previous
+    # GitLab branch at container runtime — no need to stage artifacts into Docker.
+    echo "Skipping artifact staging (git-based resume from branch $GITLAB_RESUME_BRANCH)"
+elif [[ -n "$PREV_ARTIFACTS" ]]; then
     cp -r "$PREV_ARTIFACTS"/* "$ENV_DIR/prev_artifacts/" 2>/dev/null || true
 fi
 
@@ -332,8 +354,12 @@ else
 fi
 
 cleanup() {
-    # Push artifacts to GitLab in background (non-blocking).
+    # Save GitLab branch name for future --resume-from auto-detection
     local _JOB_DIR="$SCRIPT_DIR/jobs/$JOB_NAME"
+    if [[ -n "$GITLAB_BRANCH" ]] && [[ -d "$_JOB_DIR" ]]; then
+        echo "$GITLAB_BRANCH" > "$_JOB_DIR/gitlab_branch" 2>/dev/null || true
+    fi
+    # Push artifacts to GitLab in background (non-blocking).
     if [[ -n "${GITLAB_KEY:-}" ]] && [[ -d "$_JOB_DIR" ]]; then
         echo ""
         echo "=== Pushing artifacts to GitLab ==="
@@ -352,7 +378,20 @@ trap cleanup EXIT
 
 # --- Generate instruction.md from template ---
 RESUME_NOTE=""
-if [[ -n "$PREV_ARTIFACTS" ]]; then
+if [[ -n "$GITLAB_RESUME_BRANCH" ]]; then
+    RESUME_NOTE="
+## Resumed Session
+
+This run continues from a previous session. Your workspace has been initialized
+from the previous run's GitLab branch (\`$GITLAB_RESUME_BRANCH\`) — all code,
+results, figures, paper drafts, and submissions are already in place.
+
+Review what's already done before continuing. Focus on completing the missing
+pieces rather than redoing work. Check the quality of existing artifacts and
+improve them if needed. Inspect previous reviewer feedback in \`submissions/\`
+to understand what needs fixing.
+"
+elif [[ -n "$PREV_ARTIFACTS" ]]; then
     # Build a summary of what already exists
     EXISTING=""
     [[ -d "$PREV_ARTIFACTS/experiment_codebase" ]] && \
@@ -459,8 +498,10 @@ fi
 if [[ "$GPUS" != "0" ]]; then
     echo "  GPUs:    $GPUS"
 fi
-if [[ -n "$PREV_ARTIFACTS" ]]; then
-    echo "  Resume:  $PREV_ARTIFACTS"
+if [[ -n "$GITLAB_RESUME_BRANCH" ]]; then
+    echo "  Resume:  git branch-off $GITLAB_RESUME_BRANCH"
+elif [[ -n "$PREV_ARTIFACTS" ]]; then
+    echo "  Resume:  $PREV_ARTIFACTS (artifact-based)"
 fi
 if [[ -n "$FEEDBACK" ]]; then
     echo "  Feedback: (included)"

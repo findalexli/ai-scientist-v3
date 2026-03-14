@@ -118,11 +118,24 @@ fi
 if [ -n "${{GITLAB_REPO_URL:-}}" ]; then
     cd /app
     git remote add origin "$GITLAB_REPO_URL" 2>/dev/null || git remote set-url origin "$GITLAB_REPO_URL"
-    git add -A && git commit -m "Initial workspace" --allow-empty 2>/dev/null || true
-    git checkout -b "${{GITLAB_BRANCH:-main}}" 2>/dev/null || true
     git fetch origin --no-tags 2>/dev/null || true
+
+    if [ -n "${{GITLAB_RESUME_BRANCH:-}}" ] && git rev-parse "origin/${{GITLAB_RESUME_BRANCH}}" &>/dev/null; then
+        # Resume: branch off the previous run's branch
+        git checkout -b "${{GITLAB_BRANCH:-main}}" "origin/${{GITLAB_RESUME_BRANCH}}"
+        # Install any previously-saved pip deps
+        if [ -f /app/requirements.txt ]; then
+            uv pip install --system --no-cache -r /app/requirements.txt 2>/dev/null || true
+        fi
+        echo "GitLab: branched ${{GITLAB_BRANCH}} off ${{GITLAB_RESUME_BRANCH}}"
+    else
+        # Fresh run (or fallback): commit current workspace as-is
+        git add -A && git commit -m "Initial workspace" --allow-empty 2>/dev/null || true
+        git checkout -b "${{GITLAB_BRANCH:-main}}" 2>/dev/null || true
+        echo "GitLab: created fresh branch ${{GITLAB_BRANCH:-main}}"
+    fi
+
     git push -u origin "${{GITLAB_BRANCH:-main}}" 2>/dev/null || true
-    echo "GitLab: pushed initial commit to branch ${{GITLAB_BRANCH:-main}}"
 fi
 
 SYNC_CYCLE=0

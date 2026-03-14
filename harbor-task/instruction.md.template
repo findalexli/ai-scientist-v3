@@ -46,13 +46,38 @@ cd /app && git add -A && git commit -m "describe what changed" && git push
 Good commit points: after literature review, after experiments run, after paper draft,
 after reviewer feedback addressed.
 
-You can also inspect previous runs of this same idea by listing remote branches:
+### Learn from Previous Runs
+
+Other branches in this repo are previous runs of the **same idea** — each contains a
+full workspace (experiment code, results, paper drafts, figures, and reviewer feedback).
+Checking what was already tried can save significant time and avoid repeating mistakes.
+
+Previous runs (branches):
+{{GITLAB_BRANCHES}}
+
+Before diving in, consider inspecting the most recent branches. Reviewer feedback from
+previous runs is especially valuable — it identifies what worked and what still needs
+fixing. Example commands:
+
 ```bash
+# List all branches
 git branch -a
+
+# Read the paper from a previous run
+git show origin/<branch>:latex/template.tex | head -200
+
+# Check experiment results
+git show origin/<branch>:experiment_codebase/README.md
+
+# Read reviewer feedback (most useful — tells you what to fix)
+git show origin/<branch>:submissions/v1_*/reviewer_communications/response.md
+
+# List what files exist on another branch
+git ls-tree --name-only -r origin/<branch> | head -50
 ```
 
-Previous runs (other branches):
-{{GITLAB_BRANCHES}}
+Use your judgment on what to inspect — if there are many previous branches, focus on
+the most recent ones and their reviewer feedback.
 
 ## Artifact Collection
 
