@@ -343,15 +343,23 @@ def get_job_status(job_dir: str) -> str:
     except OSError:
         return "unknown"
 
-    # Check for result.json in verifier
+    # Check for top-level result.json (written by Harbor when job truly finishes)
+    top_result = os.path.join(job_dir, "result.json")
+    if os.path.exists(top_result):
+        try:
+            with open(top_result) as f:
+                import json as _json
+                data = _json.load(f)
+            if data.get("finished_at"):
+                return "completed"
+        except (OSError, ValueError):
+            pass
+
+    # Fallback: check for result.json in verifier artifacts
     for entry in os.listdir(job_dir):
         if entry.startswith("harbor-task"):
             result_path = os.path.join(job_dir, entry, "verifier", "artifacts", "result.json")
             if os.path.exists(result_path):
-                return "completed"
-            # Check for any verifier output indicating completion
-            verifier_dir = os.path.join(job_dir, entry, "verifier")
-            if os.path.isdir(verifier_dir):
                 return "completed"
 
     return "idle"
